@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Marky Inv">
+<meta name="theme-color" content="#1B2838">
+<title>Marky Industries — Inventory</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231B2838'/><text y='.9em' font-size='75' x='10'>📦</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F5F4F0;color:#1B2838;overscroll-behavior:none}
+input,select,button{font-family:inherit}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px}
+input[type=number]::-webkit-inner-spin-button{opacity:1}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- ═══ SINGLE SCRIPT BLOCK — DO NOT SPLIT ═══ -->
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback,Fragment}=React;
+
+// ═══ COLOURS ════════════════════════════════════════════════════════════════
+const C={
+  bg:"#F5F4F0",hdr:"#1B2838",gold:"#F59E0B",
+  red:"#DC2626",grn:"#16A34A",blue:"#2563EB",
+  purp:"#7C3AED",org:"#D97706",teal:"#0E7490",
+  dim:"#6B7280",wht:"#FFFFFF"
+};
+
+// ═══ ROOM HELPER ════════════════════════════════════════════════════════════
+const ROOM_MAP={
+  Activator:"locked",Adhesive:"stainless",Catalyst:"locked",
+  Filler:"main",Flowcoat:"main",Gelcoat:"main",Glass:"main",
+  Paint:"stainless",Pigment:"stainless",Promoter:"locked",
+  Putty:"stainless",Resin:"main",Silicone:"main",Misc:"main"
+};
+const getRoom=(item)=>{
+  if(item.c==="Misc"){
+    if(["ACETONE","STYRENE","Wax in Styrene","WAX IN STYRENE","PVA"].some(k=>item.n&&item.n.includes(k)))return"locked";
+    if(["PET80","PET200","Pine Stud","Q-Cells"].some(k=>item.n&&item.n.includes(k)))return"storeroom2";
+    return"stainless";
+  }
+  return ROOM_MAP[item.c]||"storeroom2";
+};
+
+// ═══ RAW MATERIALS DATA ══════════════════════════════════════════════════════
+const INIT_RAW=[
+  // Activator
+  {c:"Activator",n:"SIKA CLEANER 205",u:"TIN",d:[null,null,2,2],mn:2},
+  // Adhesive
+  {c:"Adhesive",n:"Sika 210 Primer 1L",u:"TIN",d:[null,null,1,1],mn:1},
+  {c:"Adhesive",n:"Sika 206 Primer 250ml",u:"BOTTLE",d:[null,null,1,1],mn:1},
+  {c:"Adhesive",n:"FixTech Fix15 White 600ml",u:"SSG",d:[null,null,14,25],mn:10},
+  {c:"Adhesive",n:"Fix15 Black 290ml",u:"SSG",d:[null,null,13,13],mn:6},
+  {c:"Adhesive",n:"Fix15 White 290ml",u:"SSG",d:[null,null,9,11],mn:6},
+  {c:"Adhesive",n:"FixTech Fix15 Black 600ml",u:"SSG",d:[null,null,32,18],mn:10},
+  {c:"Adhesive",n:"SciGrip SG100-40",u:"CTG",d:[null,null,0,0],mn:2},
+  {c:"Adhesive",n:"SciGrip Metal Primer MP100",u:"BOTTLE",d:[null,null,1,1],mn:1},
+  {c:"Adhesive",n:"Sikaflex 291i White",u:"SSG",d:[null,null,11,11],mn:6},
+  {c:"Adhesive",n:"Sikaflex 291i Black",u:"SSG",d:[null,null,4,4],mn:4},
+  {c:"Adhesive",n:"Sikaflex 291i Grey",u:"SSG",d:[null,null,2,2],mn:2},
+  {c:"Adhesive",n:"Sika 295UV Black",u:"SSG",d:[null,null,0,6],mn:4},
+  {c:"Adhesive",n:"Sika 295UV White",u:"SSG",d:[null,null,6,6],mn:4},
+  {c:"Adhesive",n:"ARALDITE 2014",u:"CTG",d:[null,null,3,3],mn:2},
+  {c:"Adhesive",n:"ARALDITE 2011 50ml",u:"CTG",d:[null,null,11,11],mn:6},
+  {c:"Adhesive",n:"ARALDITE 2011 400ml",u:"CTG",d:[null,null,3,3],mn:2},
+  {c:"Adhesive",n:"Plexus MA310 50ml",u:"CTG",d:[null,null,10,10],mn:6},
+  {c:"Adhesive",n:"Plexus MA420 50ml",u:"CTG",d:[null,null,8,8],mn:4},
+  {c:"Adhesive",n:"Plexus MA425 200ml",u:"CTG",d:[null,null,0,0],mn:2},
+  // Catalyst
+  {c:"Catalyst",n:"Catalyst M",u:"KG",d:[null,null,9.5,9.5],mn:5},
+  {c:"Catalyst",n:"Catalyst P",u:"KG",d:[null,null,12,12],mn:5},
+  {c:"Catalyst",n:"Luperox K1",u:"KG",d:[null,null,15,15],mn:5},
+  {c:"Catalyst",n:"BPO Paste 50%",u:"KG",d:[null,null,4,4],mn:2},
+  // Filler
+  {c:"Filler",n:"Aerosil 200",u:"KG",d:[null,null,9,9],mn:5},
+  {c:"Filler",n:"Aerosil R202",u:"KG",d:[null,null,4.5,4.5],mn:2},
+  {c:"Filler",n:"Fillite 300SF",u:"KG",d:[null,null,25,25],mn:10},
+  {c:"Filler",n:"Q-Cel 6019",u:"KG",d:[null,null,10,10],mn:5},
+  {c:"Filler",n:"Calcium Carbonate",u:"KG",d:[null,null,50,50],mn:20},
+  {c:"Filler",n:"Aluminium Trihydrate",u:"KG",d:[null,null,100,100],mn:40},
+  {c:"Filler",n:"Talc",u:"KG",d:[null,null,20,20],mn:10},
+  // Flowcoat
+  {c:"Flowcoat",n:"FC White PRP 30kg",u:"PAIL",d:[null,null,2,2],mn:2},
+  {c:"Flowcoat",n:"FC Ivory PRP 30kg",u:"PAIL",d:[null,null,1,1],mn:1},
+  {c:"Flowcoat",n:"FC Black PRP 30kg",u:"PAIL",d:[null,null,1,1],mn:1},
+  {c:"Flowcoat",n:"FC Grey PRP 30kg",u:"PAIL",d:[null,null,0,1],mn:1},
+  {c:"Flowcoat",n:"FC ISO White Scott Bader 25kg",u:"PAIL",d:[null,null,2,2],mn:2},
+  // Gelcoat
+  {c:"Gelcoat",n:"GC White ISO PRP 20kg",u:"PAIL",d:[null,null,4,4],mn:3},
+  {c:"Gelcoat",n:"GC White ISO PRP 200kg",u:"DRUM",d:[null,null,0,1],mn:1},
+  {c:"Gelcoat",n:"GC Ivory ISO PRP 20kg",u:"PAIL",d:[null,null,2,2],mn:2},
+  {c:"Gelcoat",n:"GC Black ISO PRP 20kg",u:"PAIL",d:[null,null,1,1],mn:1},
+  {c:"Gelcoat",n:"GC White Tooling PRP 20kg",u:"PAIL",d:[null,null,1,1],mn:1},
+  {c:"Gelcoat",n:"GC Pigmented Scott Bader",u:"PAIL",d:[null,null,2,2],mn:1},
+  // Glass
+  {c:"Glass",n:"300gsm CSM 10kg roll",u:"ROLL",d:[null,null,12,15],mn:8},
+  {c:"Glass",n:"450gsm CSM 10kg roll",u:"ROLL",d:[null,null,8,10],mn:6},
+  {c:"Glass",n:"600gsm CSM 10kg roll",u:"ROLL",d:[null,null,4,4],mn:4},
+  {c:"Glass",n:"200gsm Woven Roving",u:"ROLL",d:[null,null,3,3],mn:2},
+  {c:"Glass",n:"400gsm Woven Roving",u:"ROLL",d:[null,null,2,2],mn:2},
+  {c:"Glass",n:"600gsm Woven Roving",u:"ROLL",d:[null,null,2,2],mn:2},
+  {c:"Glass",n:"Biaxial 450gsm",u:"ROLL",d:[null,null,3,3],mn:2},
+  {c:"Glass",n:"Triaxial 800gsm",u:"ROLL",d:[null,null,2,2],mn:1},
+  {c:"Glass",n:"Surface Tissue 30gsm",u:"ROLL",d:[null,null,4,4],mn:2},
+  {c:"Glass",n:"Core Mat 8mm",u:"SHEET",d:[null,null,20,20],mn:10},
+  {c:"Glass",n:"Divynicell H60 25mm",u:"SHEET",d:[null,null,10,10],mn:5},
+  // Misc
+  {c:"Misc",n:"ACETONE 20L",u:"DRUM",d:[null,null,2,3],mn:2},
+  {c:"Misc",n:"STYRENE 20L",u:"DRUM",d:[null,null,1,1],mn:1},
+  {c:"Misc",n:"Wax in Styrene 20L",u:"DRUM",d:[null,null,2,2],mn:1},
+  {c:"Misc",n:"PVA Parfilm 5L",u:"CAN",d:[null,null,4,4],mn:2},
+  {c:"Misc",n:"Release Wax Meguiars",u:"TIN",d:[null,null,6,6],mn:4},
+  {c:"Misc",n:"Mirrorglaze MW820",u:"TIN",d:[null,null,2,2],mn:2},
+  {c:"Misc",n:"PET80 Roll",u:"ROLL",d:[null,null,5,5],mn:3},
+  {c:"Misc",n:"PET200 Roll",u:"ROLL",d:[null,null,3,3],mn:2},
+  {c:"Misc",n:"Pine Stud 70x35x3m",u:"EACH",d:[null,null,20,25],mn:15},
+  {c:"Misc",n:"Q-Cells Q-Cel Bag",u:"BAG",d:[null,null,5,5],mn:3},
+  {c:"Misc",n:"Laminating Roller 25mm",u:"EACH",d:[null,null,15,15],mn:10},
+  {c:"Misc",n:"Laminating Roller 50mm",u:"EACH",d:[null,null,10,10],mn:8},
+  {c:"Misc",n:"Laminating Roller 75mm",u:"EACH",d:[null,null,8,8],mn:6},
+  {c:"Misc",n:"Mixing Sticks",u:"PKT",d:[null,null,3,3],mn:2},
+  // Paint
+  {c:"Paint",n:"Epoxy Primer Grey 4L",u:"TIN",d:[null,null,2,2],mn:2},
+  {c:"Paint",n:"Epoxy Primer Hardener 1L",u:"TIN",d:[null,null,2,2],mn:2},
+  {c:"Paint",n:"Polytrol",u:"BOTTLE",d:[null,null,1,1],mn:1},
+  // Pigment
+  {c:"Pigment",n:"Black Pigment 1kg",u:"TIN",d:[null,null,2,2],mn:1},
+  {c:"Pigment",n:"White Pigment 1kg",u:"TIN",d:[null,null,3,3],mn:2},
+  {c:"Pigment",n:"Red Iron Oxide 500g",u:"JAR",d:[null,null,1,1],mn:1},
+  {c:"Pigment",n:"Yellow Pigment 500g",u:"JAR",d:[null,null,1,1],mn:1},
+  {c:"Pigment",n:"Blue Pigment 500g",u:"JAR",d:[null,null,1,1],mn:1},
+  // Promoter
+  {c:"Promoter",n:"Cobalt Napthenate 1%",u:"KG",d:[null,null,2,2],mn:1},
+  {c:"Promoter",n:"Cobalt 6% Solution",u:"KG",d:[null,null,1,1],mn:1},
+  {c:"Promoter",n:"DMPT Solution",u:"KG",d:[null,null,0.5,0.5],mn:0.5},
+  // Putty
+  {c:"Putty",n:"Trowel Putty 6kg",u:"PAIL",d:[null,null,4,4],mn:3},
+  {c:"Putty",n:"Body Filler 3.5kg",u:"TIN",d:[null,null,3,3],mn:2},
+  {c:"Putty",n:"Epoxy Fairing Compound",u:"TIN",d:[null,null,2,2],mn:2},
+  // Resin
+  {c:"Resin",n:"ISO Lam Resin 200kg",u:"DRUM",d:[null,null,2,3],mn:2},
+  {c:"Resin",n:"ISO Lam Resin 20kg",u:"PAIL",d:[null,null,4,4],mn:3},
+  {c:"Resin",n:"GP Lam Resin 200kg",u:"DRUM",d:[null,null,1,2],mn:1},
+  {c:"Resin",n:"GP Lam Resin 20kg",u:"PAIL",d:[null,null,6,6],mn:4},
+  {c:"Resin",n:"Tooling Resin 20kg",u:"PAIL",d:[null,null,2,2],mn:2},
+  {c:"Resin",n:"Infusion Resin 20kg",u:"PAIL",d:[null,null,1,1],mn:1},
+  {c:"Resin",n:"Epoxy Laminating Resin 20L",u:"PAIL",d:[null,null,2,2],mn:2},
+  {c:"Resin",n:"Epoxy Hardener Slow 5L",u:"CAN",d:[null,null,2,2],mn:2},
+  {c:"Resin",n:"Epoxy Hardener Fast 5L",u:"CAN",d:[null,null,1,1],mn:1},
+  {c:"Resin",n:"Vinylester Resin 20kg",u:"PAIL",d:[null,null,1,1],mn:1},
+  // Silicone
+  {c:"Silicone",n:"Silicone RTV Clear 310ml",u:"CTG",d:[null,null,6,6],mn:4},
+  {c:"Silicone",n:"Silicone RTV Grey 310ml",u:"CTG",d:[null,null,4,4],mn:4},
+  {c:"Silicone",n:"Silicone Mould RTV 2 Part A",u:"KG",d:[null,null,2,2],mn:2},
+  {c:"Silicone",n:"Silicone Mould RTV 2 Part B",u:"KG",d:[null,null,2,2],mn:2},
+];
+
+// ═══ WEEKLY CONSUMABLES DATA ═════════════════════════════════════════════════
+const INIT_WEEKLY=[
+  // Tape
+  {g:"Tape",n:"Masking Tape 18mm",u:"ROLL",d:[null,null,null,null],mn:10},
+  {g:"Tape",n:"Masking Tape 24mm",u:"ROLL",d:[null,null,null,null],mn:10},
+  {g:"Tape",n:"Masking Tape 36mm",u:"ROLL",d:[null,null,null,null],mn:8},
+  {g:"Tape",n:"Masking Tape 48mm",u:"ROLL",d:[null,null,null,null],mn:6},
+  {g:"Tape",n:"Electrical Tape Black",u:"ROLL",d:[null,null,null,null],mn:4},
+  {g:"Tape",n:"Duct Tape Silver",u:"ROLL",d:[null,null,null,null],mn:4},
+  {g:"Tape",n:"Double Sided Tape",u:"ROLL",d:[null,null,null,null],mn:4},
+  {g:"Tape",n:"Peel Ply 100mm",u:"ROLL",d:[null,null,null,null],mn:2},
+  // Masking Paper
+  {g:"Masking Paper",n:"Masking Paper 300mm",u:"ROLL",d:[null,null,null,null],mn:4},
+  {g:"Masking Paper",n:"Masking Paper 600mm",u:"ROLL",d:[null,null,null,null],mn:4},
+  {g:"Masking Paper",n:"Drop Sheet Plastic 4x5m",u:"EACH",d:[null,null,null,null],mn:6},
+  // Abrasives
+  {g:"Abrasives Orb 150mm",n:"150mm P80 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 150mm",n:"150mm P120 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 150mm",n:"150mm P180 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 150mm",n:"150mm P240 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 150mm",n:"150mm P320 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 150mm",n:"150mm P400 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:1},
+  {g:"Abrasives Orb 200mm",n:"200mm P80 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 200mm",n:"200mm P120 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 200mm",n:"200mm P180 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 200mm",n:"200mm P240 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Abrasives Orb 200mm",n:"200mm P320 Disc (50pk)",u:"BOX",d:[null,null,null,null],mn:1},
+  // 5m Rolls
+  {g:"5m Rolls",n:"80 Grit 115mm Roll 5m",u:"ROLL",d:[null,null,null,null],mn:3},
+  {g:"5m Rolls",n:"120 Grit 115mm Roll 5m",u:"ROLL",d:[null,null,null,null],mn:3},
+  {g:"5m Rolls",n:"180 Grit 115mm Roll 5m",u:"ROLL",d:[null,null,null,null],mn:3},
+  {g:"5m Rolls",n:"240 Grit 115mm Roll 5m",u:"ROLL",d:[null,null,null,null],mn:2},
+  // Polish
+  {g:"Polish",n:"Meguiars M105 Mirror Glaze 946ml",u:"BOTTLE",d:[null,null,null,null],mn:2},
+  {g:"Polish",n:"Meguiars M205 Mirror Glaze 946ml",u:"BOTTLE",d:[null,null,null,null],mn:2},
+  {g:"Polish",n:"Farecla G3 Compound 500g",u:"TIN",d:[null,null,null,null],mn:2},
+  {g:"Polish",n:"Farecla G3 Paste 500g",u:"TIN",d:[null,null,null,null],mn:2},
+  {g:"Polish",n:"Farecla Profile Cutting 1L",u:"BOTTLE",d:[null,null,null,null],mn:2},
+  // PPE
+  {g:"PPE",n:"Disposable Gloves Nitrile M (100pk)",u:"BOX",d:[null,null,null,null],mn:3},
+  {g:"PPE",n:"Disposable Gloves Nitrile L (100pk)",u:"BOX",d:[null,null,null,null],mn:3},
+  {g:"PPE",n:"Disposable Gloves Nitrile XL (100pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"PPE",n:"Safety Glasses Clear",u:"PAIR",d:[null,null,null,null],mn:6},
+  {g:"PPE",n:"P2 Half Face Masks",u:"EACH",d:[null,null,null,null],mn:6},
+  {g:"PPE",n:"Respirator Cartridges A2P2",u:"PAIR",d:[null,null,null,null],mn:4},
+  {g:"PPE",n:"Disposable Overalls L",u:"EACH",d:[null,null,null,null],mn:10},
+  {g:"PPE",n:"Disposable Overalls XL",u:"EACH",d:[null,null,null,null],mn:10},
+  // Buckets & Mixing
+  {g:"Buckets",n:"8L Round Bucket",u:"EACH",d:[null,null,null,null],mn:20},
+  {g:"Buckets",n:"15L Round Bucket",u:"EACH",d:[null,null,null,null],mn:10},
+  {g:"Buckets",n:"20L Square Pail",u:"EACH",d:[null,null,null,null],mn:10},
+  {g:"Buckets",n:"Mixing Sticks Short",u:"PKT",d:[null,null,null,null],mn:5},
+  {g:"Buckets",n:"Mixing Sticks Long",u:"PKT",d:[null,null,null,null],mn:3},
+  // Paint Brushes
+  {g:"Paint Brushes",n:"25mm Disposable Brush",u:"EACH",d:[null,null,null,null],mn:20},
+  {g:"Paint Brushes",n:"50mm Disposable Brush",u:"EACH",d:[null,null,null,null],mn:15},
+  {g:"Paint Brushes",n:"75mm Disposable Brush",u:"EACH",d:[null,null,null,null],mn:10},
+  {g:"Paint Brushes",n:"Foam Roller Cover 100mm",u:"EACH",d:[null,null,null,null],mn:10},
+  {g:"Paint Brushes",n:"Foam Roller Frame 100mm",u:"EACH",d:[null,null,null,null],mn:5},
+  // Spiral Bands
+  {g:"Spiral Bands",n:"Spiral Band 50mm P80 (10pk)",u:"PKT",d:[null,null,null,null],mn:2},
+  {g:"Spiral Bands",n:"Spiral Band 50mm P120 (10pk)",u:"PKT",d:[null,null,null,null],mn:2},
+  {g:"Spiral Bands",n:"Spiral Band 75mm P80 (10pk)",u:"PKT",d:[null,null,null,null],mn:2},
+  {g:"Spiral Bands",n:"Spiral Band 75mm P120 (10pk)",u:"PKT",d:[null,null,null,null],mn:2},
+  // Grinding Discs
+  {g:"Grinding Discs",n:"115mm Grinding Disc 4.5\" Metal",u:"EACH",d:[null,null,null,null],mn:6},
+  {g:"Grinding Discs",n:"115mm Flap Disc P40",u:"EACH",d:[null,null,null,null],mn:6},
+  {g:"Grinding Discs",n:"115mm Flap Disc P60",u:"EACH",d:[null,null,null,null],mn:6},
+  {g:"Grinding Discs",n:"115mm Fibre Disc P36 (25pk)",u:"BOX",d:[null,null,null,null],mn:2},
+  {g:"Grinding Discs",n:"180mm Flap Disc P40",u:"EACH",d:[null,null,null,null],mn:4},
+  // Sponge
+  {g:"Sponge",n:"Scotch Brite Green (10pk)",u:"PKT",d:[null,null,null,null],mn:3},
+  {g:"Sponge",n:"Wet & Dry 240 (25pk)",u:"PKT",d:[null,null,null,null],mn:3},
+  {g:"Sponge",n:"Wet & Dry 400 (25pk)",u:"PKT",d:[null,null,null,null],mn:3},
+  {g:"Sponge",n:"Wet & Dry 800 (25pk)",u:"PKT",d:[null,null,null,null],mn:2},
+  {g:"Sponge",n:"Wet & Dry 1200 (25pk)",u:"PKT",d:[null,null,null,null],mn:2},
+  {g:"Sponge",n:"Wet & Dry 2000 (25pk)",u:"PKT",d:[null,null,null,null],mn:2},
+  // Empties tracking
+  {g:"Empties",n:"200L Resin Drums (empty)",u:"DRUM",d:[0,0,0,0],mn:0},
+  {g:"Empties",n:"20kg Resin Pails (empty)",u:"PAIL",d:[0,0,0,0],mn:0},
+  {g:"Empties",n:"20L Chemical Drums (empty)",u:"DRUM",d:[0,0,0,0],mn:0},
+  {g:"Empties",n:"IBC Totes (empty)",u:"IBC",d:[0,0,0,0],mn:0},
+];
+
+// ═══ JOBS DATA ═══════════════════════════════════════════════════════════════
+const JOBS=[
+  {co:"Sleeper Box",id:"SB-001",n:"Lid Seal Kit White",qty:5,cost:12.50},
+  {co:"Sleeper Box",id:"SB-002",n:"Bunk Mat 1200x600",qty:8,cost:45.00},
+  {co:"Sleeper Box",id:"SB-003",n:"Corner Bracket Set",qty:12,cost:8.50},
+  {co:"Sleeper Box",id:"SB-004",n:"Hinge Piano 600mm",qty:6,cost:15.00},
+  {co:"Sleeper Box",id:"SB-005",n:"Latch Slam 2 Point",qty:10,cost:22.00},
+  {co:"Atlas Copco",id:"AC-001",n:"Cover Plate GRP 400x300",qty:3,cost:185.00},
+  {co:"Atlas Copco",id:"AC-002",n:"Inlet Hood Assembly",qty:2,cost:320.00},
+  {co:"Atlas Copco",id:"AC-003",n:"Filter Housing Base",qty:1,cost:450.00},
+  {co:"Elgas",id:"EL-001",n:"Cabinet Door Skin White",qty:4,cost:125.00},
+  {co:"Elgas",id:"EL-002",n:"Base Tray 1200x600",qty:2,cost:280.00},
+  {co:"Elgas",id:"EL-003",n:"Vent Panel Louvred",qty:6,cost:95.00},
+  {co:"Landmark",id:"LM-001",n:"Wall Cladding Panel 2.4m",qty:15,cost:65.00},
+  {co:"Landmark",id:"LM-002",n:"Eave Lining 3.6m",qty:8,cost:48.00},
+  {co:"Landmark",id:"LM-003",n:"Column Casing 200x200",qty:4,cost:220.00},
+  {co:"Aero",id:"AR-001",n:"Cowl Intake 300mm",qty:2,cost:380.00},
+  {co:"Aero",id:"AR-002",n:"Fairing Panel LH",qty:1,cost:520.00},
+  {co:"Aero",id:"AR-003",n:"Fairing Panel RH",qty:1,cost:520.00},
+];
+
+// ═══ LOCAL STORAGE ════════════════════════════════════════════════════════════
+const LS_KEY="marky_inv_v2";
+const loadState=()=>{
+  try{
+    const s=localStorage.getItem(LS_KEY);
+    return s?JSON.parse(s):null;
+  }catch(e){return null;}
+};
+const saveState=(state)=>{
+  try{localStorage.setItem(LS_KEY,JSON.stringify(state));}
+  catch(e){console.warn("Save failed",e);}
+};
+
+// ═══ WEEKLY DATE COLUMNS ═════════════════════════════════════════════════════
+const WK_DATES=["4-Mar","11-Mar","18-Mar","25-Mar"];
+const MO_DATES=["21-Jan","28-Jan","Previous","28-Feb"];
+
+// ═══ STYLES HELPERS ══════════════════════════════════════════════════════════
+const s={
+  app:{minHeight:"100vh",background:C.bg,paddingBottom:70},
+  hdr:{background:C.hdr,color:C.wht,padding:"10px 12px 6px",position:"sticky",top:0,zIndex:100},
+  hdrTitle:{fontSize:16,fontWeight:700,letterSpacing:1},
+  hdrSub:{fontSize:10,color:"#94A3B8",marginTop:1},
+  nav:{position:"fixed",bottom:0,left:0,right:0,background:C.hdr,display:"flex",borderTop:"2px solid "+C.gold,zIndex:100},
+  navBtn:(a)=>({flex:1,padding:"8px 2px 6px",border:"none",background:a?"#2D3E52":"transparent",color:a?C.gold:"#94A3B8",fontSize:9,fontWeight:a?700:400,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}),
+  navIco:{fontSize:18},
+  content:{padding:10,maxWidth:900,margin:"0 auto"},
+  card:{background:C.wht,borderRadius:8,padding:"8px 10px",marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,0.08)"},
+  badge:(bg,fg)=>({background:bg,color:fg||C.wht,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:10,display:"inline-block"}),
+  input:(w)=>({width:w||"100%",border:"1px solid #D1D5DB",borderRadius:4,padding:"4px 6px",fontSize:12,background:C.wht}),
+  numInput:{width:54,border:"1px solid #D1D5DB",borderRadius:4,padding:"4px 4px",fontSize:12,textAlign:"center",background:C.wht},
+  btn:(bg,fg)=>({background:bg||C.hdr,color:fg||C.wht,border:"none",borderRadius:6,padding:"6px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}),
+  row:{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"},
+  label:{fontSize:10,fontWeight:600,color:C.dim,marginBottom:3,display:"block"},
+  section:{fontSize:11,fontWeight:700,color:C.hdr,padding:"6px 0 4px",borderBottom:"1px solid #E5E7EB",marginBottom:6},
+  tbl:{width:"100%",borderCollapse:"collapse",fontSize:11},
+  th:{background:"#F1F5F9",padding:"5px 6px",textAlign:"left",fontWeight:700,fontSize:10,borderBottom:"2px solid #CBD5E1",whiteSpace:"nowrap"},
+  td:{padding:"4px 6px",borderBottom:"1px solid #F1F5F9",verticalAlign:"middle"},
+  tr:(low)=>({background:low?"#FEF2F2":"transparent"}),
+  saveBar:{position:"fixed",bottom:56,left:0,right:0,background:"#065F46",color:C.wht,padding:"6px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11,fontWeight:600,zIndex:99},
+};
+
+// ═══ CATEGORY COLOURS ════════════════════════════════════════════════════════
+const catColor={
+  Activator:"#0E7490",Adhesive:"#7C3AED",Catalyst:"#DC2626",
+  Filler:"#D97706",Flowcoat:"#059669",Gelcoat:"#2563EB",
+  Glass:"#16A34A",Misc:"#6B7280",Paint:"#DB2777",Pigment:"#D97706",
+  Promoter:"#DC2626",Putty:"#92400E",Resin:"#1D4ED8",Silicone:"#0E7490"
+};
+const roomLabel={main:"🏭 Main",stainless:"🔩 Stainless",locked:"🔒 Locked",storeroom2:"📦 Store 2"};
+
+// ═══ MAIN APP ═════════════════════════════════════════════════════════════════
+function App(){
+  const saved=loadState();
+  const [tab,setTab]=useState("stock");
+  const [ri,setRi]=useState(()=>(saved&&saved.ri)||INIT_RAW.map((x,i)=>({...x,id:i,qty:x.d[3]||0})));
+  const [wi,setWi]=useState(()=>(saved&&saved.wi)||INIT_WEEKLY.map((x,i)=>({...x,id:i+1000,qty:0})));
+  const [jobs,setJobs]=useState(()=>(saved&&saved.jobs)||JOBS.map((x,i)=>({...x,id:i+2000})));
+  const [saveMsg,setSaveMsg]=useState(null);
+  const saveTimer=useRef(null);
+
+  // Auto-save with debounce
+  useEffect(()=>{
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{
+      saveState({ri,wi,jobs});
+      setSaveMsg("✅ Saved");
+      setTimeout(()=>setSaveMsg(null),1500);
+    },1500);
+    return()=>clearTimeout(saveTimer.current);
+  },[ri,wi,jobs]);
+
+  const manualSave=()=>{
+    saveState({ri,wi,jobs});
+    setSaveMsg("✅ Saved now!");
+    setTimeout(()=>setSaveMsg(null),2000);
+  };
+
+  const updateRi=(id,field,val)=>setRi(p=>p.map(x=>x.id===id?{...x,[field]:val}:x));
+  const updateWi=(id,field,val)=>setWi(p=>p.map(x=>x.id===id?{...x,[field]:val}:x));
+
+  const resetAll=()=>{
+    if(!confirm("Reset ALL data to defaults? This cannot be undone."))return;
+    const nr=INIT_RAW.map((x,i)=>({...x,id:i,qty:x.d[3]||0}));
+    const nw=INIT_WEEKLY.map((x,i)=>({...x,id:i+1000,qty:0}));
+    const nj=JOBS.map((x,i)=>({...x,id:i+2000}));
+    setRi(nr);setWi(nw);setJobs(nj);
+    saveState({ri:nr,wi:nw,jobs:nj});
+    setSaveMsg("🔄 Reset done");
+    setTimeout(()=>setSaveMsg(null),2000);
+  };
+
+  const exportCSV=()=>{
+    const rows=[["Category","Name","UOM","Qty","Min","Room"],...ri.map(x=>[x.c,x.n,x.u,x.qty,x.mn,getRoom(x)])];
+    const csv=rows.map(r=>r.join(",")).join("\n");
+    const a=document.createElement("a");
+    a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+    a.download="marky-stock-"+new Date().toISOString().slice(0,10)+".csv";
+    a.click();
+  };
+
+  const low=ri.filter(x=>x.qty<=x.mn);
+  const lowWi=wi.filter(x=>x.g!=="Empties"&&x.qty<=x.mn);
+
+  const TABS=[
+    {id:"stock",icon:"📦",label:"Stock"},
+    {id:"count",icon:"📋",label:"Count"},
+    {id:"rooms",icon:"🏭",label:"Rooms"},
+    {id:"reorder",icon:"⚠️",label:`Reorder${low.length+lowWi.length>0?" "+((low.length+lowWi.length)):""}`,badge:low.length+lowWi.length},
+    {id:"data",icon:"💾",label:"Data"},
+  ];
+
+  return(
+    <div style={s.app}>
+      {/* Header */}
+      <div style={s.hdr}>
+        <div style={s.hdrTitle}>MARKY INDUSTRIES</div>
+        <div style={s.hdrSub}>Warehouse Inventory · Crestmead QLD · v1.3</div>
+      </div>
+
+      {/* Content */}
+      <div style={s.content}>
+        {tab==="stock"&&<StockTab ri={ri} updateRi={updateRi} wi={wi}/>}
+        {tab==="count"&&<CountTab ri={ri} updateRi={updateRi} wi={wi} updateWi={updateWi}/>}
+        {tab==="rooms"&&<RoomsTab ri={ri} updateRi={updateRi}/>}
+        {tab==="reorder"&&<ReorderTab low={low} lowWi={lowWi}/>}
+        {tab==="data"&&<DataTab ri={ri} wi={wi} jobs={jobs} setRi={setRi} setWi={setWi} setJobs={setJobs} resetAll={resetAll} exportCSV={exportCSV} manualSave={manualSave}/>}
+      </div>
+
+      {/* Save indicator */}
+      {saveMsg&&<div style={s.saveBar}><span>{saveMsg}</span><span>localStorage ✅</span></div>}
+
+      {/* Nav */}
+      <div style={s.nav}>
+        {TABS.map(t=>(
+          <button key={t.id} style={s.navBtn(tab===t.id)} onClick={()=>setTab(t.id)}>
+            <span style={s.navIco}>{t.icon}</span>
+            <span>{t.badge>0?`(${t.badge})`:""}{t.label.replace(/ \d+$/,"")}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══ STOCK TAB ═══════════════════════════════════════════════════════════════
+function StockTab({ri,updateRi,wi}){
+  const [search,setSearch]=useState("");
+  const [cat,setCat]=useState("All");
+  const cats=["All",...[...new Set(ri.map(x=>x.c))].sort()];
+  const filtered=ri.filter(x=>(cat==="All"||x.c===cat)&&(x.n.toLowerCase().includes(search.toLowerCase())));
+
+  return(
+    <div>
+      <div style={{...s.card,background:"#EFF6FF"}}>
+        <div style={s.row}>
+          <div style={{flex:1}}>
+            <label style={s.label}>🔍 Search</label>
+            <input style={s.input()} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Type item name..."/>
+          </div>
+          <div style={{width:130}}>
+            <label style={s.label}>Category</label>
+            <select style={s.input()} value={cat} onChange={e=>setCat(e.target.value)}>
+              {cats.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{fontSize:10,color:C.dim}}>{filtered.length} items · {ri.filter(x=>x.qty<=x.mn).length} low stock</div>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={s.tbl}>
+          <thead><tr>
+            <th style={s.th}>Category</th>
+            <th style={s.th}>Item</th>
+            <th style={s.th}>UOM</th>
+            <th style={s.th}>Qty</th>
+            <th style={s.th}>Min</th>
+            <th style={s.th}>Room</th>
+          </tr></thead>
+          <tbody>
+            {filtered.map(x=>{
+              const isLow=x.qty<=x.mn;
+              return(
+                <tr key={x.id} style={s.tr(isLow)}>
+                  <td style={s.td}><span style={s.badge(catColor[x.c]||C.dim)}>{x.c}</span></td>
+                  <td style={{...s.td,maxWidth:200}}>{isLow&&<span title="Low stock">🔴 </span>}{x.n}</td>
+                  <td style={s.td}><span style={{fontSize:9,color:C.dim}}>{x.u}</span></td>
+                  <td style={s.td}>
+                    <input type="number" style={s.numInput} value={x.qty} min={0}
+                      onChange={e=>updateRi(x.id,"qty",parseFloat(e.target.value)||0)}/>
+                  </td>
+                  <td style={s.td}>
+                    <input type="number" style={{...s.numInput,width:44,background:"#FFF8EB"}} value={x.mn} min={0}
+                      onChange={e=>updateRi(x.id,"mn",parseFloat(e.target.value)||0)}/>
+                  </td>
+                  <td style={s.td}><span style={{fontSize:10}}>{roomLabel[getRoom(x)]}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ═══ COUNT TAB ═══════════════════════════════════════════════════════════════
+function CountTab({ri,updateRi,wi,updateWi}){
+  const [sub,setSub]=useState("monthly");
+  const [catF,setCatF]=useState("All");
+  const [grpF,setGrpF]=useState("All");
+
+  const cats=["All",...[...new Set(ri.map(x=>x.c))].sort()];
+  const grps=["All",...[...new Set(wi.filter(x=>x.g!=="Empties").map(x=>x.g))].sort()];
+
+  return(
+    <div>
+      <div style={s.row}>
+        <button style={s.btn(sub==="monthly"?C.hdr:"#E5E7EB",sub==="monthly"?C.wht:C.hdr)} onClick={()=>setSub("monthly")}>📅 Monthly</button>
+        <button style={s.btn(sub==="weekly"?C.org:"#E5E7EB",sub==="weekly"?C.wht:C.hdr)} onClick={()=>setSub("weekly")}>📆 Weekly</button>
+      </div>
+      {sub==="monthly"&&(
+        <div>
+          <div style={{...s.card,background:"#F0FDF4",marginBottom:8}}>
+            <div style={s.row}>
+              <div>
+                <label style={s.label}>Category</label>
+                <select style={s.input(120)} value={catF} onChange={e=>setCatF(e.target.value)}>
+                  {cats.map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={s.tbl}>
+              <thead><tr>
+                <th style={s.th}>Cat</th>
+                <th style={s.th}>Item</th>
+                <th style={s.th}>UOM</th>
+                {MO_DATES.map(d=><th key={d} style={{...s.th,background:d==="28-Feb"?"#DBEAFE":undefined}}>{d}</th>)}
+                <th style={{...s.th,background:"#F0FDF4"}}>Current</th>
+                <th style={s.th}>Min</th>
+              </tr></thead>
+              <tbody>
+                {ri.filter(x=>catF==="All"||x.c===catF).map(x=>(
+                  <tr key={x.id} style={s.tr(x.qty<=x.mn)}>
+                    <td style={s.td}><span style={{fontSize:9,...s.badge(catColor[x.c]||C.dim)}}>{x.c.slice(0,4)}</span></td>
+                    <td style={{...s.td,minWidth:140,maxWidth:200,fontSize:11}}>{x.n}</td>
+                    <td style={{...s.td,fontSize:9,color:C.dim}}>{x.u}</td>
+                    {x.d.map((v,i)=><td key={i} style={{...s.td,background:i===3?"#EFF6FF":undefined,textAlign:"center"}}>{v??"-"}</td>)}
+                    <td style={{...s.td,background:"#F0FDF4"}}>
+                      <input type="number" style={s.numInput} value={x.qty} min={0}
+                        onChange={e=>updateRi(x.id,"qty",parseFloat(e.target.value)||0)}/>
+                    </td>
+                    <td style={s.td}>
+                      <input type="number" style={{...s.numInput,width:44,background:"#FFF8EB"}} value={x.mn} min={0}
+                        onChange={e=>updateRi(x.id,"mn",parseFloat(e.target.value)||0)}/>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {sub==="weekly"&&(
+        <div>
+          <div style={{...s.card,background:"#FFF7ED",marginBottom:8}}>
+            <div>
+              <label style={s.label}>Group</label>
+              <select style={s.input(150)} value={grpF} onChange={e=>setGrpF(e.target.value)}>
+                {grps.map(g=><option key={g}>{g}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={s.tbl}>
+              <thead><tr>
+                <th style={s.th}>Group</th>
+                <th style={s.th}>Item</th>
+                <th style={s.th}>UOM</th>
+                {WK_DATES.map(d=><th key={d} style={s.th}>{d}</th>)}
+                <th style={{...s.th,background:"#F0FDF4"}}>Current</th>
+                <th style={s.th}>Min</th>
+              </tr></thead>
+              <tbody>
+                {wi.filter(x=>x.g!=="Empties"&&(grpF==="All"||x.g===grpF)).map(x=>(
+                  <tr key={x.id} style={s.tr(x.qty<=x.mn)}>
+                    <td style={{...s.td,fontSize:9,color:C.dim,whiteSpace:"nowrap"}}>{x.g}</td>
+                    <td style={{...s.td,minWidth:160,fontSize:11}}>{x.n}</td>
+                    <td style={{...s.td,fontSize:9,color:C.dim}}>{x.u}</td>
+                    {x.d.map((v,i)=><td key={i} style={{...s.td,textAlign:"center"}}>{v??"-"}</td>)}
+                    <td style={{...s.td,background:"#F0FDF4"}}>
+                      <input type="number" style={s.numInput} value={x.qty} min={0}
+                        onChange={e=>updateWi(x.id,"qty",parseFloat(e.target.value)||0)}/>
+                    </td>
+                    <td style={s.td}>
+                      <input type="number" style={{...s.numInput,width:44,background:"#FFF8EB"}} value={x.mn} min={0}
+                        onChange={e=>updateWi(x.id,"mn",parseFloat(e.target.value)||0)}/>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══ ROOMS TAB ═══════════════════════════════════════════════════════════════
+function RoomsTab({ri,updateRi}){
+  const [room,setRoom]=useState("main");
+  const rooms=["main","stainless","locked","storeroom2"];
+  const items=ri.filter(x=>getRoom(x)===room);
+  const roomMeta={
+    main:{label:"🏭 Main Workshop",color:C.hdr,desc:"General stock, glass, resins, gelcoats"},
+    stainless:{label:"🔩 Stainless Room",color:"#374151",desc:"Adhesives, paints, pigments, putties"},
+    locked:{label:"🔒 Locked Room",color:C.red,desc:"Solvents, catalysts, activators, promoters"},
+    storeroom2:{label:"📦 Storeroom 2",color:C.blue,desc:"Bulky items, PET rolls, foam"},
+  };
+
+  return(
+    <div>
+      <div style={s.row}>
+        {rooms.map(r=>(
+          <button key={r} style={s.btn(room===r?roomMeta[r].color:"#E5E7EB",room===r?C.wht:C.hdr)} onClick={()=>setRoom(r)}>
+            {roomMeta[r].label.split(" ").slice(0,2).join(" ")}
+          </button>
+        ))}
+      </div>
+      <div style={{...s.card,background:"#F8FAFC",marginBottom:8}}>
+        <div style={{fontWeight:700}}>{roomMeta[room].label}</div>
+        <div style={{fontSize:10,color:C.dim,marginTop:2}}>{roomMeta[room].desc} · {items.length} items</div>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={s.tbl}>
+          <thead><tr>
+            <th style={s.th}>Cat</th><th style={s.th}>Item</th><th style={s.th}>UOM</th>
+            <th style={s.th}>Qty</th><th style={s.th}>Min</th>
+          </tr></thead>
+          <tbody>
+            {items.map(x=>(
+              <tr key={x.id} style={s.tr(x.qty<=x.mn)}>
+                <td style={s.td}><span style={s.badge(catColor[x.c]||C.dim)}>{x.c.slice(0,4)}</span></td>
+                <td style={{...s.td,minWidth:160}}>{x.qty<=x.mn&&"🔴 "}{x.n}</td>
+                <td style={{...s.td,fontSize:9,color:C.dim}}>{x.u}</td>
+                <td style={s.td}><input type="number" style={s.numInput} value={x.qty} min={0} onChange={e=>updateRi(x.id,"qty",parseFloat(e.target.value)||0)}/></td>
+                <td style={s.td}><input type="number" style={{...s.numInput,width:44,background:"#FFF8EB"}} value={x.mn} min={0} onChange={e=>updateRi(x.id,"mn",parseFloat(e.target.value)||0)}/></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ═══ REORDER TAB ══════════════════════════════════════════════════════════════
+function ReorderTab({low,lowWi}){
+  const total=low.length+lowWi.length;
+  if(total===0)return(
+    <div style={{...s.card,textAlign:"center",padding:30}}>
+      <div style={{fontSize:36,marginBottom:8}}>✅</div>
+      <div style={{fontWeight:700,fontSize:14}}>All stock levels OK</div>
+      <div style={{fontSize:11,color:C.dim,marginTop:4}}>No items below minimum</div>
+    </div>
+  );
+  return(
+    <div>
+      <div style={{...s.card,background:"#FEF2F2",marginBottom:8}}>
+        <div style={{fontWeight:700,color:C.red}}>⚠️ {total} items need reordering</div>
+        <div style={{fontSize:10,color:C.dim,marginTop:2}}>{low.length} raw materials · {lowWi.length} consumables</div>
+      </div>
+      {low.length>0&&(
+        <div>
+          <div style={s.section}>Raw Materials ({low.length})</div>
+          <table style={s.tbl}>
+            <thead><tr>
+              <th style={s.th}>Cat</th><th style={s.th}>Item</th><th style={s.th}>Qty</th><th style={s.th}>Min</th><th style={s.th}>Short</th>
+            </tr></thead>
+            <tbody>
+              {low.map(x=>(
+                <tr key={x.id} style={{background:"#FEF2F2"}}>
+                  <td style={s.td}><span style={s.badge(catColor[x.c]||C.dim)}>{x.c.slice(0,4)}</span></td>
+                  <td style={s.td}>{x.n}</td>
+                  <td style={{...s.td,color:C.red,fontWeight:700}}>{x.qty}</td>
+                  <td style={s.td}>{x.mn}</td>
+                  <td style={{...s.td,color:C.red,fontWeight:700}}>-{x.mn-x.qty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {lowWi.length>0&&(
+        <div style={{marginTop:12}}>
+          <div style={s.section}>Weekly Consumables ({lowWi.length})</div>
+          <table style={s.tbl}>
+            <thead><tr>
+              <th style={s.th}>Group</th><th style={s.th}>Item</th><th style={s.th}>Qty</th><th style={s.th}>Min</th>
+            </tr></thead>
+            <tbody>
+              {lowWi.map(x=>(
+                <tr key={x.id} style={{background:"#FEF2F2"}}>
+                  <td style={{...s.td,fontSize:9,color:C.dim}}>{x.g}</td>
+                  <td style={s.td}>{x.n}</td>
+                  <td style={{...s.td,color:C.red,fontWeight:700}}>{x.qty}</td>
+                  <td style={s.td}>{x.mn}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══ DATA TAB ════════════════════════════════════════════════════════════════
+function DataTab({ri,wi,jobs,setRi,setWi,setJobs,resetAll,exportCSV,manualSave}){
+  const importCSV=(e,type)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      const lines=ev.target.result.split("\n").filter(Boolean);
+      const headers=lines[0].split(",");
+      const rows=lines.slice(1).map(l=>{
+        const v=l.split(",");
+        return Object.fromEntries(headers.map((h,i)=>[h.trim(),v[i]?.trim()]));
+      });
+      if(type==="raw"){
+        setRi(prev=>prev.map(x=>{
+          const match=rows.find(r=>r.name===x.n||r.Item===x.n);
+          if(match){
+            return{...x,qty:parseFloat(match.Qty||match.qty||x.qty)||x.qty,mn:parseFloat(match.Min||match.min||x.mn)||x.mn};
+          }
+          return x;
+        }));
+        alert("✅ Raw materials updated from CSV");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value="";
+  };
+
+  const rawRef=useRef();
+
+  return(
+    <div>
+      <div style={s.card}>
+        <div style={s.section}>💾 Save & Export</div>
+        <div style={s.row}>
+          <button style={s.btn(C.grn)} onClick={manualSave}>💾 Save Now</button>
+          <button style={s.btn(C.teal)} onClick={exportCSV}>📤 Export CSV</button>
+        </div>
+        <div style={{fontSize:10,color:C.dim,marginTop:4}}>Data auto-saves every 1.5 seconds to this device's local storage</div>
+      </div>
+      <div style={s.card}>
+        <div style={s.section}>📥 Import CSV</div>
+        <button style={{...s.btn(C.blue),marginBottom:6}} onClick={()=>rawRef.current.click()}>📂 Import Raw Materials CSV</button>
+        <input ref={rawRef} type="file" accept=".csv" style={{display:"none"}} onChange={e=>importCSV(e,"raw")}/>
+        <div style={{fontSize:10,color:C.dim}}>CSV must have columns: name, Qty, Min (or Item, Qty, Min)</div>
+      </div>
+      <div style={s.card}>
+        <div style={s.section}>📊 Summary</div>
+        <div style={{fontSize:12,lineHeight:1.8}}>
+          <div>📦 Raw materials: <strong>{ri.length}</strong></div>
+          <div>🧹 Weekly consumables: <strong>{wi.filter(x=>x.g!=="Empties").length}</strong></div>
+          <div>🔧 Job items: <strong>{jobs.length}</strong></div>
+          <div>⚠️ Low stock: <strong style={{color:C.red}}>{ri.filter(x=>x.qty<=x.mn).length}</strong></div>
+          <div>🏢 Marky Industries Pty Ltd · ABN 72 010 795 310</div>
+          <div>📍 1 Magnesium Drive, Crestmead QLD 4132</div>
+        </div>
+      </div>
+      <div style={{...s.card,border:"2px solid "+C.red}}>
+        <div style={s.section}>🔄 Reset Data</div>
+        <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Reset all quantities back to original defaults. Minimums are kept.</div>
+        <button style={s.btn(C.red)} onClick={resetAll}>🗑️ Reset All Data</button>
+      </div>
+    </div>
+  );
+}
+
+// ═══ RENDER ══════════════════════════════════════════════════════════════════
+const root=ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App/>);
+</script>
+</body>
+</html>
