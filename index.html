@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Marky Inv">
+<meta name="theme-color" content="#1B2838">
+<title>Marky Industries — Inventory v1.1</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F5F4F0;color:#1B2838}
+input,select,button{font-family:inherit}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-thumb{background:#bbb;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+/* ═══════════════════════════════════════════════════════════════
+   MARKY INDUSTRIES INVENTORY PWA — v1.1 ARCHIVE
+   Data from 28-Feb-2026 stocktake. localStorage persistence.
+   7 tabs: Stock | Count | Rooms | Jobs | Reorder | Empties | Data
+═══════════════════════════════════════════════════════════════ */
+const {useState,useEffect,useRef,useCallback}=React;
+
+// ── Colours ────────────────────────────────────────────────────
+const C={bg:"#F5F4F0",hdr:"#1B2838",gold:"#F59E0B",red:"#DC2626",
+  grn:"#16A34A",blue:"#2563EB",purp:"#7C3AED",org:"#D97706",
+  teal:"#0E7490",dim:"#6B7280",wht:"#FFFFFF"};
+
+// ── Room logic ─────────────────────────────────────────────────
+const getRoom=i=>{
+  const m={Activator:"locked",Adhesive:"stainless",Catalyst:"locked",
+    Filler:"main",Flowcoat:"main",Gelcoat:"main",Glass:"main",
+    Paint:"stainless",Pigment:"stainless",Promoter:"locked",
+    Putty:"stainless",Resin:"main",Silicone:"storeroom2"};
+  if(i.c==="Misc"){
+    if(["ACETONE","STYRENE","Wax in Styrene","PVA"].some(k=>i.n.includes(k)))return"locked";
+    if(["PET80","PET200","Pine Stud","Q-Cell"].some(k=>i.n.includes(k)))return"storeroom2";
+    return"stainless";
+  }
+  return m[i.c]||"storeroom2";
+};
+const ROOM_LBL={main:"🏭 Main",stainless:"🔩 Stainless",locked:"🔒 Locked",storeroom2:"📦 Store 2"};
+const ROOM_DESC={main:"Resins, Gelcoats, Glass, Fillers, Flowcoats",
+  stainless:"Adhesives, Paints, Pigments, Putties",
+  locked:"Catalysts, Activators, Promoters, Solvents",
+  storeroom2:"Foam Sheets, Poly Tubing, Silicone"};
+
+// ── Category colours ───────────────────────────────────────────
+const CC={Activator:"#0E7490",Adhesive:"#7C3AED",Catalyst:"#DC2626",
+  Filler:"#D97706",Flowcoat:"#059669",Gelcoat:"#2563EB",Glass:"#16A34A",
+  Misc:"#6B7280",Paint:"#DB2777",Pigment:"#B45309",Promoter:"#DC2626",
+  Putty:"#92400E",Resin:"#1D4ED8",Silicone:"#0D9488"};
+
+// ── Raw materials — d:[21-Jan,28-Jan,Previous,28-Feb,current] ──
+const R_INIT=[
+
+// ── Activator ──
+{c:"Activator",n:"SIKA CLEANER 205",u:"TIN",d:[2,2],m:1},
+// ── Adhesive ──
+{c:"Adhesive",n:"Sika 210 Primer 1L",u:"TIN",d:[1.1,1.1],m:1},
+{c:"Adhesive",n:"Sika 206 Primer 250ml",u:"BOTTLE",d:[1,1],m:1},
+{c:"Adhesive",n:"FixTech Fix15 White 600ml",u:"SSG",d:[14,25],m:10},
+{c:"Adhesive",n:"Fix15 Black 290ml",u:"SSG",d:[13,13],m:6},
+{c:"Adhesive",n:"Fix15 White 290ml",u:"SSG",d:[9,11],m:6},
+{c:"Adhesive",n:"FixTech Fix15 Black 600ml",u:"SSG",d:[32,18],m:10},
+{c:"Adhesive",n:"SciGrip SG100-40",u:"CTG",d:[0,0],m:2},
+{c:"Adhesive",n:"SciGrip Metal Primer MP100",u:"TIN",d:[0,0],m:1},
+{c:"Adhesive",n:"SciGrip SG230HVA 50gal",u:"DRUM",d:[0,0],m:0},
+{c:"Adhesive",n:"SciGrip SG230HVA 5gal",u:"PAIL",d:[0,2],m:1},
+{c:"Adhesive",n:"SciGrip SG216B-G Act 5gal",u:"PAIL",d:[0,0],m:0},
+{c:"Adhesive",n:"SciGrip SG300-15-B Black",u:"CTG",d:[0,0],m:2},
+{c:"Adhesive",n:"SciGrip SG300-40-B 490mL",u:"CTG",d:[5,0],m:2},
+{c:"Adhesive",n:"Plexus MA2245 490mL",u:"CTG",d:[7,0],m:3},
+{c:"Adhesive",n:"Parfix Window Silicone",u:"CTG",d:[0,0],m:2},
+{c:"Adhesive",n:"Mapei G19 Adhesive 5kg",u:"TIN",d:[0,6],m:2},
+{c:"Adhesive",n:"Technirez R2517 Part A",u:"TIN",d:[0,0],m:1},
+{c:"Adhesive",n:"Technirez H2430 Part B",u:"TIN",d:[1,1],m:1},
+{c:"Adhesive",n:"Technirez R2532 Lam Paste",u:"PAIL",d:[1,1.5],m:1},
+{c:"Adhesive",n:"Technirez R2501 Tooling",u:"TIN",d:[0,0],m:0},
+{c:"Adhesive",n:"Technirez H2406 Tool Hard",u:"TIN",d:[1,0],m:1},
+{c:"Adhesive",n:"Technirez H2402 Tool 1kg",u:"BOTTLE",d:[0.5,0.5],m:0.5},
+{c:"Adhesive",n:"Technirez H2403 Tool Med",u:"BOTTLE",d:[0.2,0.2],m:0.2},
+{c:"Adhesive",n:"Techniglue R15 Epoxy 4lt",u:"TIN",d:[4,4],m:2},
+{c:"Adhesive",n:"Techniglue H15 Hard 4lt",u:"TIN",d:[4,4],m:2},
+{c:"Adhesive",n:"Techniglue R5 TEA 4kg",u:"TIN",d:[3.5,4.2],m:2},
+{c:"Adhesive",n:"Techniglue H5 Hard 1Kg",u:"BOTTLE",d:[3,3],m:1},
+{c:"Adhesive",n:"MP 55350 Part A 50Gal",u:"DRUM",d:[0,0],m:0},
+{c:"Adhesive",n:"MP 55300 Part B 50Gal",u:"DRUM",d:[0,0],m:0},
+{c:"Adhesive",n:"M31 RTM Mould Spray",u:"CAN",d:[38,36],m:20},
+{c:"Adhesive",n:"Supa-Grip 1000 Spray 20lt",u:"PAIL",d:[0,0],m:0},
+{c:"Adhesive",n:"Merican 1153PA 20kg",u:"PAIL",d:[1,0],m:1},
+// ── Catalyst ──
+{c:"Catalyst",n:"ANDONOX LCR-S",u:"BOTTLE",d:[0,0],m:1},
+{c:"Catalyst",n:"CUROX M100",u:"BOTTLE",d:[10.75,3],m:5},
+{c:"Catalyst",n:"CUROX M300",u:"BOTTLE",d:[0,0],m:1},
+{c:"Catalyst",n:"Curox M340",u:"BOTTLE",d:[1,1],m:1},
+{c:"Catalyst",n:"CUROX A300",u:"BOTTLE",d:[1.5,0],m:1},
+{c:"Catalyst",n:"Curox M200",u:"BOTTLE",d:[0,0],m:1},
+{c:"Catalyst",n:"Curox CATA 2000",u:"BOTTLE",d:[3,1],m:1},
+{c:"Catalyst",n:"Curox VP160A",u:"BOTTLE",d:[0.5,10],m:2},
+{c:"Catalyst",n:"RM 2000 CATALYST",u:"BOTTLE",d:[0,0],m:1},
+{c:"Catalyst",n:"Nuplex BUTANOX LA",u:"BOTTLE",d:[0,8],m:2},
+{c:"Catalyst",n:"Nuplex BUTANOX M60",u:"BOTTLE",d:[0,0],m:1},
+{c:"Catalyst",n:"Allnex Butanox M50",u:"BOTTLE",d:[7.25,9],m:5},
+{c:"Catalyst",n:"Nuplex Norox MEKP925H",u:"BOTTLE",d:[3,0],m:2},
+{c:"Catalyst",n:"Nuplex Norox MCP",u:"BOTTLE",d:[2,2],m:2},
+{c:"Catalyst",n:"Nuplex Norox CHM50",u:"BOTTLE",d:[0.75,0.5],m:0.5},
+{c:"Catalyst",n:"Nuplex NR-20 MEKP",u:"BOTTLE",d:[0.2,0.2],m:0.2},
+{c:"Catalyst",n:"Nuplex Norox MEKP9",u:"BOTTLE",d:[0.25,0.25],m:0.25},
+{c:"Catalyst",n:"Superox 46-750",u:"BOTTLE",d:[0.5,0.5],m:0.5},
+{c:"Catalyst",n:"Cumene Hydroperoxide 90%",u:"BOTTLE",d:[1,0.5],m:0.5},
+{c:"Catalyst",n:"PPG Epoxy Cat P275 5L",u:"BOTTLE",d:[4,1],m:2},
+// ── Filler ──
+{c:"Filler",n:"OMYACARB 40",u:"BAG",d:[4,4],m:2},
+{c:"Filler",n:"ATL AL1000 Aluminium",u:"BAG",d:[4,0],m:2},
+{c:"Filler",n:"E-Spheres SL300",u:"PAIL",d:[1,1],m:1},
+{c:"Filler",n:"Plustalc 325 Talc",u:"BAG",d:[9,9],m:4},
+// ── Flowcoat ──
+{c:"Flowcoat",n:"NB9019 White Brush",u:"BAG",d:[1,1],m:1},
+{c:"Flowcoat",n:"NB9019 White Brush Drum",u:"PAIL",d:[6,4],m:3},
+{c:"Flowcoat",n:"NS9019 White Spray",u:"DRUM",d:[0,1],m:1},
+{c:"Flowcoat",n:"Escon Olive Ortho",u:"PAIL",d:[0.5,0],m:0},
+{c:"Flowcoat",n:"PRP 943 LtBlue Brush",u:"PAIL",d:[0,0],m:0},
+{c:"Flowcoat",n:"PRP 944 Naval Grey",u:"PAIL",d:[0,0],m:0},
+{c:"Flowcoat",n:"PRP 953 Charcoal Brush",u:"PAIL",d:[0.75,2],m:1},
+// ── Gelcoat ──
+{c:"Gelcoat",n:"Nuvopol White 25kg",u:"TIN",d:[0.25,0],m:0},
+{c:"Gelcoat",n:"Allnex RM6110 Beige",u:"TIN",d:[1,2],m:1},
+{c:"Gelcoat",n:"CFI 3410 Tangerine VE",u:"TIN",d:[1,1],m:1},
+{c:"Gelcoat",n:"Ultratec Red VE 20kg",u:"PAIL",d:[1,0],m:0},
+{c:"Gelcoat",n:"PRP 943 Black Spray",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"PRP 943 Clear Spray",u:"PAIL",d:[3,1],m:1},
+{c:"Gelcoat",n:"PRP 943 Lt Blue Spray",u:"PAIL",d:[3.5,1.5],m:1},
+{c:"Gelcoat",n:"PRP 943 Dk Blue Spray",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"PRP 943 Olive 222kg",u:"DRUM",d:[1,0],m:0},
+{c:"Gelcoat",n:"PRP 943 Sandshoe",u:"PAIL",d:[1,0],m:0},
+{c:"Gelcoat",n:"PRP 943 Dune Spray",u:"PAIL",d:[0,10],m:2},
+{c:"Gelcoat",n:"PRP 943 Storm Grey",u:"PAIL",d:[1,0],m:0},
+{c:"Gelcoat",n:"PRP 943 BIOME Blue",u:"PAIL",d:[0,30],m:5},
+{c:"Gelcoat",n:"PRP 943 CB Gully Grey",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"PRP 944 Martack 226kg",u:"DRUM",d:[1,0.5],m:0.5},
+{c:"Gelcoat",n:"PRP 944 Jasper",u:"PAIL",d:[1,1],m:1},
+{c:"Gelcoat",n:"PRP 944 Charcoal Tacky",u:"PAIL",d:[1,1],m:1},
+{c:"Gelcoat",n:"PRP 944 Seagull Grey",u:"PAIL",d:[0,5],m:2},
+{c:"Gelcoat",n:"PRP 944 Storm Grey",u:"PAIL",d:[2,3],m:1},
+{c:"Gelcoat",n:"PRP 944 Ironstone",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"PRP 944 White 4kg",u:"TIN",d:[1,0],m:0},
+{c:"Gelcoat",n:"PRP 944 Surfmist",u:"PAIL",d:[2,2.5],m:1},
+{c:"Gelcoat",n:"PRP 944 Beige 21kg",u:"PAIL",d:[1,0.5],m:0.5},
+{c:"Gelcoat",n:"PRP 944 Neutral 21kg",u:"PAIL",d:[0.25,2],m:0.5},
+{c:"Gelcoat",n:"PRP Polycor White Flex",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"PRP Green Tooling 945",u:"PAIL",d:[1,2],m:1},
+{c:"Gelcoat",n:"PRP 953 White Spray",u:"PAIL",d:[1,1],m:1},
+{c:"Gelcoat",n:"PRP 953 White Brush",u:"DRUM",d:[0,0],m:0},
+{c:"Gelcoat",n:"PRP 953 Charcoal Spray",u:"PAIL",d:[1.25,2],m:1},
+{c:"Gelcoat",n:"Scott Bader 44E Grey R7035",u:"PAIL",d:[1.75,2],m:1},
+{c:"Gelcoat",n:"Uncomp Eggshell Spray",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"Uncomp Beige Spray",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"Uncomp Wombat Brown",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"Uncomp Clear",u:"PAIL",d:[0,0],m:0},
+{c:"Gelcoat",n:"CFI Cherry Picker White 4kg",u:"TIN",d:[1,1],m:1},
+// ── Glass ──
+{c:"Glass",n:"Core Mat CF600 36kg",u:"KG",d:[5700,0],m:500},
+{c:"Glass",n:"Core Mat CF600 68kg",u:"KG",d:[3264,0],m:500},
+{c:"Glass",n:"Core Mat CF450 68kg",u:"KG",d:[3536,32],m:200},
+{c:"Glass",n:"Triaxial 1150 225gsm",u:"KG",d:[0,3],m:1},
+{c:"Glass",n:"Quadaxial 1204gm 600gsm",u:"KG",d:[0,0],m:0},
+{c:"Glass",n:"Core Mat CF900",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"Woven Roving 600g EWR600",u:"KG",d:[6,0],m:2},
+{c:"Glass",n:"Sphere Core SBC 6mm",u:"ROLL",d:[1,1.5],m:1},
+{c:"Glass",n:"ALDSTRUM 300/250/300",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"CTG CSM 225g",u:"ROLL",d:[0,6],m:2},
+{c:"Glass",n:"CTG CSM 300g",u:"ROLL",d:[0,6],m:2},
+{c:"Glass",n:"CTG CSM 450g",u:"ROLL",d:[0,3],m:2},
+{c:"Glass",n:"CTG CSM 600g",u:"ROLL",d:[0,3],m:2},
+{c:"Glass",n:"Jushi EMC225",u:"ROLL",d:[4,8],m:3},
+{c:"Glass",n:"Jushi EMC300",u:"ROLL",d:[4,6],m:3},
+{c:"Glass",n:"Jushi EMC450",u:"ROLL",d:[2,0],m:2},
+{c:"Glass",n:"Jushi EMC600",u:"ROLL",d:[1,0],m:1},
+{c:"Glass",n:"CFI Jushi EWR600D",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"CFI E-Glass WR EWR600",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"CFI Biaxial EKLT600",u:"ROLL",d:[4,2],m:2},
+{c:"Glass",n:"Colan Triaxial 1150gsm",u:"ROLL",d:[3,0],m:1},
+{c:"Glass",n:"Colan Quadraxial 1204gsm",u:"ROLL",d:[4,5],m:2},
+{c:"Glass",n:"Colan Jushi 225gsm Emulsion",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"Colan 600gsm CSM Split",u:"ROLL",d:[5,3],m:2},
+{c:"Glass",n:"Colan 450gsm CSM Split",u:"ROLL",d:[7,3],m:3},
+{c:"Glass",n:"Colan Ezi Flow 600/250/600",u:"KG",d:[0,0],m:0},
+{c:"Glass",n:"WOVEN RVG 600g N323",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"EWR800 Woven Roving",u:"KG",d:[0,0],m:0},
+{c:"Glass",n:"Quadraxial 1205gsm slit",u:"ROLL",d:[0,5],m:2},
+{c:"Glass",n:"Quadraxial 600gsm 1270mm",u:"ROLL",d:[3,3],m:1},
+{c:"Glass",n:"Quadraxial 600gsm slit",u:"ROLL",d:[8,2],m:2},
+{c:"Glass",n:"Allnex Coremat XM 2mm",u:"ROLL",d:[1,4],m:1},
+{c:"Glass",n:"Coremat XM 3mm",u:"ROLL",d:[2,4],m:1},
+{c:"Glass",n:"Coremat Xi 1mm",u:"ROLL",d:[1,3],m:1},
+{c:"Glass",n:"SORIC XF 3mm",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"Nuplex Soric XF 2mm",u:"ROLL",d:[0,0],m:0},
+{c:"Glass",n:"Triaxial 1150gsm slit",u:"ROLL",d:[4,1],m:1},
+{c:"Glass",n:"Colan Unidirectional 600gsm",u:"ROLL",d:[2,2],m:1},
+{c:"Glass",n:"E-Glass Chopped 3mm CFI",u:"BAG",d:[12,13],m:5},
+{c:"Glass",n:"Bonnet skins",u:"EACH",d:[18,15],m:5},
+{c:"Glass",n:"Fender Extensions",u:"EACH",d:[0,0],m:0},
+{c:"Glass",n:"Inners",u:"EACH",d:[15,24],m:5},
+{c:"Glass",n:"Lights (2 sets)",u:"EACH",d:[57,55],m:10},
+{c:"Glass",n:"Weber Pillar Base pack",u:"EACH",d:[16,9],m:5},
+{c:"Glass",n:"Patriot X1A kit",u:"EACH",d:[2,2],m:1},
+{c:"Glass",n:"Patriot X1H kit",u:"EACH",d:[0,0],m:0},
+{c:"Glass",n:"Patriot X3 Lid kit",u:"EACH",d:[2,2],m:1},
+{c:"Glass",n:"Royal Wolf Seats kit",u:"EACH",d:[0,0],m:0},
+{c:"Glass",n:"Terex Lights kit",u:"EACH",d:[15,18],m:5},
+{c:"Glass",n:"Terex Turret Covers kit",u:"EACH",d:[0,30],m:5},
+{c:"Glass",n:"800 Dive Block kit",u:"EACH",d:[10,10],m:3},
+{c:"Glass",n:"800 Track Start kit",u:"EACH",d:[8,8],m:3},
+{c:"Glass",n:"650 Dive Block kit",u:"EACH",d:[14,14],m:3},
+{c:"Glass",n:"650 Track Start kit",u:"EACH",d:[0,0],m:0},
+{c:"Glass",n:"Penske 4800 kit",u:"EACH",d:[4,4],m:1},
+// ── Misc ──
+{c:"Misc",n:"Pine Stud 70x35x3m",u:"EACH",d:[140,103],m:50},
+{c:"Misc",n:"Technirez R1300 Epoxy Resin A 4kg",u:"BUCKET",d:[3,3],m:1},
+{c:"Misc",n:"Technirez H1300 Epoxy Hard B 2kg",u:"BUCKET",d:[3,3],m:1},
+{c:"Misc",n:"West System G/Flex Resin 4L",u:"BOTTLE",d:[4,3],m:1},
+{c:"Misc",n:"West System G/Flex Hard 4L",u:"BOTTLE",d:[4,3],m:1},
+{c:"Misc",n:"West System 413 Microfibre",u:"BAG",d:[1,0],m:0},
+{c:"Misc",n:"Technirez AL1000 Gran 5kg",u:"BUCKET",d:[1,1],m:1},
+{c:"Misc",n:"Technirez R1025 Casting A",u:"TIN",d:[1,1],m:1},
+{c:"Misc",n:"Technirez H1026 Tooling B",u:"BOTTLE",d:[1,0],m:0},
+{c:"Misc",n:"ACETONE (CFI)",u:"DRUM",d:[1,0],m:0},
+{c:"Misc",n:"AQUABUFF 1000 2gall",u:"PAIL",d:[0,3],m:1},
+{c:"Misc",n:"AQUABUFF 2000 2kg",u:"BUCKET",d:[16,14],m:5},
+{c:"Misc",n:"COARSE SAND",u:"BAG",d:[0,0],m:0},
+{c:"Misc",n:"FINE SAND",u:"BAG",d:[0,0],m:0},
+{c:"Misc",n:"Abasco Sand F156 5kg",u:"KG",d:[2,2],m:1},
+{c:"Misc",n:"PVA PLASTRENE 18kg",u:"PAIL",d:[0.25,1],m:0.5},
+{c:"Misc",n:"PPG PINHOLE FILLER",u:"TIN",d:[0,1],m:1},
+{c:"Misc",n:"3M Ultrafine Machine Polish",u:"BOTTLE",d:[0.25,0.25],m:0},
+{c:"Misc",n:"STYRENE MONOMER",u:"PAIL",d:[5,3],m:2},
+{c:"Misc",n:"Wax in Styrene 5kg",u:"TIN",d:[1,2.5],m:1},
+{c:"Misc",n:"WAX IN STYRENE 20kg",u:"PAIL",d:[0,0],m:0},
+{c:"Misc",n:"Q-Cells 5020 27kg",u:"BAG",d:[0,1],m:0},
+{c:"Misc",n:"Roberlo Maxifil 3L",u:"TIN",d:[6,3],m:2},
+{c:"Misc",n:"Mikon R-47 Cleaner",u:"TIN",d:[1,1],m:1},
+{c:"Misc",n:"Mikon 870MC Release Agent",u:"TIN",d:[1,1],m:1},
+{c:"Misc",n:"Mikon 229MC Release Agent",u:"TIN",d:[3,3],m:2},
+{c:"Misc",n:"Mikon 227-MMC Release Agent 5L",u:"BOTTLE",d:[0,0],m:0},
+{c:"Misc",n:"Loctite Frewax Frekote 3.78L",u:"TIN",d:[3,3],m:2},
+{c:"Misc",n:"Marbocote Mold Cleaner",u:"TIN",d:[5,5],m:2},
+{c:"Misc",n:"Marbocote 516FC",u:"TIN",d:[2,2],m:1},
+{c:"Misc",n:"Marbocote 227CEE Release Agent",u:"TIN",d:[1,2],m:1},
+{c:"Misc",n:"Marbocote Fastcote",u:"TIN",d:[2,2],m:1},
+{c:"Misc",n:"Marbocote HT Mould Sealer",u:"TIN",d:[5,3],m:2},
+{c:"Misc",n:"Dibutyl Phthalate",u:"PAIL",d:[1,1],m:0},
+{c:"Misc",n:"Septone Flexcote Bitumen 20L",u:"PAIL",d:[1.25,4],m:1},
+{c:"Misc",n:"Paracryl IF540 Acrylic Cure 1L",u:"TIN",d:[2.5,4],m:1},
+{c:"Misc",n:"Meguiars MGH8 Mold Release",u:"TIN",d:[0,2],m:1},
+{c:"Misc",n:"Farecla Profile 200 Buffing",u:"BOTTLE",d:[0,2],m:1},
+{c:"Misc",n:"Zyvax Enviroshield",u:"BOTTLE",d:[1.1,1],m:1},
+{c:"Misc",n:"Colourfast Wax Grease Remover",u:"PAIL",d:[0,1],m:0},
+{c:"Misc",n:"Scott Bader Crestamould RTR 4010PA",u:"PAIL",d:[0,2],m:1},
+{c:"Misc",n:"Kinetix H126 Lam Hardener",u:"BOTTLE",d:[0.25,2],m:0.25},
+{c:"Misc",n:"Kinetix H160 Lam Hard PartB",u:"BOTTLE",d:[0.15,0.1],m:0},
+{c:"Misc",n:"Kinetix R246TX Thixo Lam 18kg",u:"PAIL",d:[0.25,2],m:0.25},
+{c:"Misc",n:"Kinetix R240 Lam Epoxy 18kg",u:"PAIL",d:[0.1,0.1],m:0},
+{c:"Misc",n:"TR-111 Slurry Wax 18.93L",u:"PAIL",d:[1,1],m:1},
+{c:"Misc",n:"CDC T3919A Jet Black 15kg",u:"CAN",d:[0,6],m:2},
+{c:"Misc",n:"Miracle Gloss Mold Release 680",u:"CAN",d:[1,1],m:1},
+{c:"Misc",n:"Miracle Gloss Max Release 311g",u:"TIN",d:[12,8],m:5},
+{c:"Misc",n:"ERA Ecofoam R175 Isocyanate 4kg",u:"TIN",d:[1,1],m:1},
+{c:"Misc",n:"ERA Ecofoam R175 Polyol 4kg",u:"TIN",d:[1,1],m:1},
+{c:"Misc",n:"XPS 25mm Foam",u:"SHEET",d:[0,0],m:0},
+{c:"Misc",n:"XPS 45mm Foam",u:"SHEET",d:[0,0],m:0},
+{c:"Misc",n:"XPS 30mm Foam",u:"SHEET",d:[0,0],m:0},
+{c:"Misc",n:"XPS 100mm Foam",u:"SHEET",d:[0,0],m:0},
+{c:"Misc",n:"PET80 10mm Foam",u:"SHEET",d:[1,0],m:0},
+{c:"Misc",n:"PET80 15mm Foam",u:"SHEET",d:[18,20],m:10},
+{c:"Misc",n:"PET80 20mm Foam",u:"SHEET",d:[26,18],m:10},
+{c:"Misc",n:"PET80 25mm Foam",u:"SHEET",d:[18,18],m:10},
+{c:"Misc",n:"PET80 30mm Foam",u:"SHEET",d:[11,6],m:5},
+{c:"Misc",n:"PET200 25mm Foam",u:"SHEET",d:[0,0],m:0},
+{c:"Misc",n:"PET200 50mm Foam",u:"SHEET",d:[9,4],m:3},
+{c:"Misc",n:"Patriot X3 PET Kit GR70-25",u:"KIT",d:[1,0],m:0},
+{c:"Misc",n:"Polyfoam 1.2m x 10mm x 45m",u:"ROLL",d:[2,2],m:1},
+{c:"Misc",n:"Polyfoam 1.5m x 100m x 1mm",u:"ROLL",d:[0,1],m:0},
+{c:"Misc",n:"Polyfoam 1.2m x 100m x 2mm",u:"ROLL",d:[2,1],m:1},
+// ── Paint ──
+{c:"Paint",n:"PPG F3975 Primer 4L",u:"TIN",d:[17,14],m:5},
+{c:"Paint",n:"PPG F3265 Hardener",u:"PAIL",d:[4,8],m:2},
+{c:"Paint",n:"PPG F3325 Thinner",u:"PAIL",d:[2,2],m:2},
+{c:"Paint",n:"PPG F4968 Cond Primer",u:"TIN",d:[11.75,12],m:4},
+{c:"Paint",n:"Wagon Matt Black 4L",u:"TIN",d:[1,12],m:2},
+{c:"Paint",n:"WILDFIRE RED Enamel",u:"TIN",d:[0,6],m:1},
+{c:"Paint",n:"Colourthane Hard C-Ser",u:"TIN",d:[0,12],m:2},
+{c:"Paint",n:"Spartan Wheel Silver",u:"TIN",d:[1.5,0.5],m:1},
+{c:"Paint",n:"Lesonal 480 Primer",u:"TIN",d:[2,2],m:1},
+{c:"Paint",n:"ATL Duratec 500 Thin",u:"TIN",d:[1.5,1.5],m:1},
+{c:"Paint",n:"U-POL Raptor Black",u:"KIT",d:[8,8],m:4},
+// ── Pigment ──
+{c:"Pigment",n:"Sand Shoe Pigment",u:"KG",d:[0,0],m:0},
+{c:"Pigment",n:"Dune Pigment",u:"KG",d:[0,0],m:0},
+{c:"Pigment",n:"SIGNAL RED PIGMENT",u:"KG",d:[1,0],m:0},
+// ── Promoter ──
+{c:"Promoter",n:"DMPT",u:"TIN",d:[0,0],m:0},
+{c:"Promoter",n:"DMA Promoter #1",u:"KG",d:[1.5,0],m:0.5},
+{c:"Promoter",n:"COBALT #2",u:"KG",d:[0.7,0],m:0.5},
+// ── Putty ──
+{c:"Putty",n:"Everglaze Spot 454g",u:"TUBE",d:[4,13],m:4},
+{c:"Putty",n:"PROBOND",u:"PAIL",d:[0,1],m:1},
+{c:"Putty",n:"SPV506 17kg",u:"PAIL",d:[4,2],m:2},
+// ── Resin ──
+{c:"Resin",n:"Swancor 901-T2P-40",u:"DRUM",d:[1,2],m:1},
+{c:"Resin",n:"Allnex Ultratec LSE",u:"DRUM",d:[2,1],m:1},
+{c:"Resin",n:"Allnex Polyplex FR 60m",u:"DRUM",d:[0,8],m:2},
+{c:"Resin",n:"Allnex Polyplex FR 45m",u:"DRUM",d:[2,0],m:1},
+{c:"Resin",n:"Allnex Hetron 922PAW",u:"DRUM",d:[1,2],m:1},
+{c:"Resin",n:"Allnex Hetron 922PAS",u:"DRUM",d:[2,0],m:1},
+{c:"Resin",n:"Allnex 1472 Infusion",u:"DRUM",d:[1,6],m:2},
+{c:"Resin",n:"Allnex Derakane 8084",u:"DRUM",d:[0,1],m:1},
+{c:"Resin",n:"Polyplex 1472 Inf Blk",u:"DRUM",d:[1,1.5],m:1},
+{c:"Resin",n:"Polipol 338 Inf ISO",u:"DRUM",d:[0,2],m:1},
+{c:"Resin",n:"PRP Norsodyne 1680 20L",u:"PAIL",d:[0,1],m:1},
+{c:"Resin",n:"PRP H350 Lam Non LSE",u:"PAIL",d:[1,1],m:1},
+{c:"Resin",n:"PRP OptiMold Tooling",u:"DRUM",d:[1,1],m:1},
+{c:"Resin",n:"PRP Kayak KRF-1031",u:"DRUM",d:[3,0],m:1},
+{c:"Resin",n:"NCS 705-50 RTM VE",u:"DRUM",d:[0,6],m:2},
+{c:"Resin",n:"CDR 700-70 VE",u:"DRUM",d:[0,6],m:2},
+{c:"Resin",n:"CDR 700-50 VE",u:"DRUM",d:[0,6],m:2},
+{c:"Resin",n:"Ultratec Tool LP 250kg",u:"DRUM",d:[4,2],m:1},
+{c:"Resin",n:"Spabond 540 Resin",u:"PAIL",d:[15,13],m:5},
+{c:"Resin",n:"Spabond 540 Hard",u:"PAIL",d:[13,11],m:5},
+// ── Silicone ──
+{c:"Silicone",n:"SVB26 Plat B 20kg",u:"PAIL",d:[16,11],m:5},
+{c:"Silicone",n:"SVB26 Plat A 20kg",u:"PAIL",d:[16,11],m:5},
+{c:"Silicone",n:"Thixotropic T1",u:"KG",d:[0,2],m:1},
+
+];
+
+const W_INIT=[
+{g:"Tape",n:"Masking 19mm",m:24,d:[63,61,50,null,null]},
+{g:"Tape",n:"Masking 38mm",m:96,d:[72,28,0,null,null]},
+{g:"Tape",n:"Masking 50mm",m:24,d:[48,null,34,null,null]},
+{g:"Tape",n:"Clear",m:20,d:[53,44,41,null,null]},
+{g:"Tape",n:"Duct",m:20,d:[67,63,63,null,null]},
+{g:"Tape",n:"m31 Adhesive Spray",m:20,d:[7,87,59,null,null]},
+{g:"Masking Paper",n:"Full Rolls",m:20,d:[50,34,16,null,null]},
+{g:"Masking Paper",n:"1/2 Rolls",m:10,d:[73,73,72,null,null]},
+{g:"Orb 150mm",n:"40 Grit",m:500,d:[920,750,400,null,null]},
+{g:"Orb 150mm",n:"80 Grit",m:500,d:[1860,1750,1450,null,null]},
+{g:"Orb 150mm",n:"120 Grit",m:500,d:[1360,1300,1250,null,null]},
+{g:"Orb 150mm",n:"180 Grit",m:1000,d:[2050,1900,1150,null,null]},
+{g:"Orb 150mm",n:"320 Grit",m:1000,d:[7850,7850,7400,null,null]},
+{g:"Orb 150mm",n:"600 Grit",m:500,d:[3250,3000,2650,null,null]},
+{g:"Orb 150mm",n:"800 Grit",m:100,d:[350,300,300,null,null]},
+{g:"Orb 150mm",n:"1200 Grit",m:100,d:[550,500,450,null,null]},
+{g:"Orb 200mm",n:"40 Grit",m:500,d:[350,150,50,null,null]},
+{g:"Orb 200mm",n:"80 Grit",m:500,d:[2400,2000,1950,null,null]},
+{g:"Orb 200mm",n:"120 Grit",m:100,d:[950,600,600,null,null]},
+{g:"Orb 200mm",n:"180 Grit",m:500,d:[2150,2000,1950,null,null]},
+{g:"Orb 200mm",n:"240 Grit",m:500,d:[700,550,500,null,null]},
+{g:"Orb 200mm",n:"320 Grit",m:500,d:[1550,1280,1200,null,null]},
+{g:"5m Rolls",n:"40 Grit",m:2,d:[4,2.5,2.4,null,null]},
+{g:"5m Rolls",n:"80 Grit",m:2,d:[5,4,3.4,null,null]},
+{g:"5m Rolls",n:"120 Grit",m:1,d:[0,0,0,null,null]},
+{g:"5m Rolls",n:"180 Grit",m:1,d:[0,0,0,null,null]},
+{g:"Sponge",n:"Fine",m:50,d:[300,240,200,null,null]},
+{g:"Sponge",n:"Medium",m:50,d:[360,240,320,null,null]},
+{g:"Spiral Bands",n:"36# 19x25mm",m:100,d:[360,360,350,null,null]},
+{g:"Spiral Bands",n:"80 19x25",m:40,d:[40,40,100,null,null]},
+{g:"Spiral Bands",n:"36 25x25",m:40,d:[100,100,100,null,null]},
+{g:"Spiral Bands",n:"80 25x38",m:40,d:[70,120,120,null,null]},
+{g:"Spiral Bands",n:"36 25x38",m:50,d:[35,35,14,null,null]},
+{g:"Spiral Bands",n:"80 (Loose)",m:40,d:[50,10,0,null,null]},
+{g:"Spiral Discs",n:"36# 50mm",m:40,d:[6,0,100,null,null]},
+{g:"Spiral Discs",n:"36# 75mm",m:40,d:[160,75,100,null,null]},
+{g:"Grinding",n:"24# 4in",m:300,d:[130,130,500,null,null]},
+{g:"Grinding",n:"36# 4in",m:300,d:[140,140,425,null,null]},
+{g:"Mini Bands",n:"60#",m:200,d:[160,145,150,null,null]},
+{g:"Polish",n:"Aquabuff 1000",m:1,d:[3,3,3,null,null]},
+{g:"Polish",n:"Aquabuff 2000",m:10,d:[15,15,14,null,null]},
+{g:"Polish",n:"DahlPacMC79 100x25mm",m:2,d:[3,3,3,null,null]},
+{g:"Polish",n:"Knife",m:30,d:[9,4,0,null,null]},
+{g:"Polish",n:"Knife Blades",m:30,d:[45,40,30,null,null]},
+{g:"Polish",n:"Craft Right Stanley Blades",m:0,d:[null,15,0,null,null]},
+{g:"Wax",n:"Miracle Gloss",m:5,d:[11,8,8,null,null]},
+{g:"Release Agents",n:"227 CEE",m:2,d:[2,2,2,null,null]},
+{g:"Release Agents",n:"Sealer",m:1,d:[5,4.5,4,null,null]},
+{g:"Release Agents",n:"Cleaner",m:2,d:[4,3,4,null,null]},
+{g:"Release Agents",n:"Fastcote",m:2,d:[1,1,2,null,null]},
+{g:"Buckets",n:"20 lt",m:15,d:[16,9,7,null,null]},
+{g:"Buckets",n:"10lt",m:30,d:[0,102,100,null,null]},
+{g:"Buckets",n:"10lt long",m:4,d:[1,0,0,null,null]},
+{g:"Buckets",n:"4 litre ice cream cont",m:0,d:[null,288,154,null,null]},
+{g:"Buckets",n:"2 litre ice cream cont",m:0,d:[null,628,486,null,null]},
+{g:"Fillers",n:"Body Filler",m:6,d:[5,5,4,null,null]},
+{g:"Fillers",n:"Pin Hole Filler",m:4,d:[5,11,9,null,null]},
+{g:"Fillers",n:"Spot Putty",m:6,d:[15,14,14,null,null]},
+{g:"Cups",n:"Cups",m:600,d:[590,406,210,null,null]},
+{g:"Buff Pads",n:"Large",m:12,d:[18,21,14,null,null]},
+{g:"Buff Pads",n:"Small",m:0,d:[10,7,3,null,null]},
+{g:"PPE",n:"P2 Masks Boxes",m:10,d:[20,18,15,null,null]},
+{g:"PPE",n:"Safety Glasses Boxes",m:40,d:[28,18,17,null,null]},
+{g:"Paint Brushes",n:"100mm",m:15,d:[87,78,75,null,null]},
+{g:"Paint Brushes",n:"75mm",m:15,d:[63,54,51,null,null]},
+{g:"Paint Brushes",n:"50mm",m:40,d:[27,16,5,null,null]},
+{g:"Paint Brushes",n:"25mm",m:12,d:[52,41,31,null,null]},
+{g:"Rolls",n:"Cardboard",m:2,d:[5,3,2,null,null]},
+{g:"Rolls",n:"Foam 1.2mm",m:1,d:[4,0,0,null,null]},
+{g:"Rolls",n:"Foam 2.0mm",m:1,d:[2,2,1.5,null,null]},
+{g:"Rolls",n:"Foam 10mm",m:1,d:[2,1,1.5,null,null]},
+{g:"Rolls",n:"Bubble Wrap",m:2,d:[3,3,2,null,null]},
+{g:"Poly Tubing",n:"1000mm",m:1,d:[1,1,1,null,null]},
+{g:"Poly Tubing",n:"600mm",m:1,d:[3,3,1,null,null]},
+{g:"Poly Tubing",n:"300mm",m:1,d:[2,2,2,null,null]},
+{g:"Stretch Film",n:"Stretch Film",m:4,d:[12,12,9,null,null]},
+{g:"Latex Gloves",n:"Medium",m:10,d:[37,29,22,null,null]},
+{g:"Latex Gloves",n:"Large",m:10,d:[45,29,13,null,null]},
+{g:"Latex Gloves",n:"Xtra Large",m:10,d:[43,39,34,null,null]},
+{g:"Safety Gloves",n:"Size 7",m:30,d:[40,39,37,null,null]},
+{g:"Safety Gloves",n:"Size 8",m:30,d:[35,32,30,null,null]},
+{g:"Safety Gloves",n:"Size 9",m:30,d:[24,19,13,null,null]},
+{g:"Safety Gloves",n:"Size 10",m:60,d:[12,5,1,null,null]},
+];
+
+// ── Jobs data ──────────────────────────────────────────────────
+const JD=[
+{j:"Sleeper Box",d:"Struts",ct:0},
+{j:"Sleeper Box",d:"Chipboard screws",ct:0},
+{j:"Sleeper Box",d:"Paddle lock",ct:0},
+{j:"Sleeper Box",d:"Sub-Frame Assembly",ct:0},
+{j:"Sleeper Box",d:"Bunk Bed Assy",ct:0},
+{j:"SR Smith",d:"Aqua Deck Pacific Blue",ct:18},
+{j:"SR Smith",d:"Anchor Kit SS316",ct:31},
+{j:"SR Smith",d:"Quick Release Kit",ct:43},
+{j:"SR Smith",d:"Backstroke Polished",ct:78},
+{j:"SR Smith",d:"316 T-pieces T Bar",ct:76},
+{j:"SR Smith",d:"Locking Bar",ct:7},
+{j:"Redmond Gary",d:"Cross Part/Water Shedder",ct:19},
+{j:"Redmond Gary",d:"Yellow Basket Rim",ct:0},
+{j:"Redmond Gary",d:"2in Plastic Plug",ct:61},
+{j:"JJ Richards",d:"Camera Mount Plate",ct:312},
+{j:"JJ Richards",d:"Bracket LH RH",ct:24},
+{j:"JJ Richards",d:"Camera Mount Bracket",ct:74},
+{j:"EDI Rail",d:"Marker Light RH",ct:10},
+{j:"EDI Rail",d:"Marker Light LH",ct:10},
+{j:"Volvo Parts",d:"Bonnet Bar TAF/TAB",ct:20},
+{j:"Volvo Parts",d:"Bonnet Bar ST Square",ct:28},
+{j:"Volvo Parts",d:"Bonnet Bar GM",ct:15},
+];
+const JOB_NAMES=[...new Set(JD.map(x=>x.j))];
+
+const DEF_DRUMS=[
+{n:"Resin Drum (200kg)",ct:0},{n:"Gelcoat/Flowcoat Drum (200kg)",ct:0},
+{n:"Solvent Drum (200L)",ct:0},{n:"General Chemical Drum (200L)",ct:0},
+{n:"Small Drum (60L)",ct:0},{n:"Pail (20L)",ct:0},
+];
+const DEF_IBCS=[
+{n:"Resin IBC (1000L)",ct:0},{n:"Solvent/Chemical IBC (1000L)",ct:0},
+{n:"Water IBC (1000L)",ct:0},{n:"General IBC (1000L)",ct:0},
+];
+
+const MO_DATES=["21-Jan","28-Jan","Previous","28-Feb"];
+const WK_DATES=["11-Feb","18-Feb","25-Feb","4-Mar"];
+const LS_KEY="marky_v11";
+
+// ── localStorage ───────────────────────────────────────────────
+const lsLoad=()=>{try{const s=localStorage.getItem(LS_KEY);return s?JSON.parse(s):null;}catch{return null;}};
+const lsSave=(o)=>{try{localStorage.setItem(LS_KEY,JSON.stringify(o));}catch(e){console.warn(e);}};
+
+// ── Styles ─────────────────────────────────────────────────────
+const s={
+  app:{minHeight:"100vh",background:C.bg,paddingBottom:64},
+  hdr:{background:C.hdr,color:C.wht,padding:"10px 12px 6px",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 8px rgba(0,0,0,0.3)"},
+  tabs:{display:"flex",background:"#0F1923",overflowX:"auto",borderBottom:"2px solid "+C.gold},
+  tab:(a)=>({flex:"0 0 auto",padding:"7px 10px",border:"none",background:a?C.hdr:"transparent",
+    color:a?C.gold:"#8FA3B8",fontSize:10,fontWeight:a?700:400,cursor:"pointer",whiteSpace:"nowrap",
+    borderBottom:a?"2px solid "+C.gold:"2px solid transparent"}),
+  content:{padding:8,maxWidth:960,margin:"0 auto"},
+  card:{background:C.wht,borderRadius:8,padding:"8px 10px",marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,0.08)"},
+  badge:(bg)=>({background:bg,color:C.wht,fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:8,display:"inline-block"}),
+  inp:(w)=>({width:w||"100%",border:"1px solid #D1D5DB",borderRadius:4,padding:"4px 6px",fontSize:12}),
+  numI:{width:54,border:"1px solid #D1D5DB",borderRadius:4,padding:"3px 4px",fontSize:12,textAlign:"center"},
+  minI:{width:44,border:"1px solid #FDE68A",borderRadius:4,padding:"3px 4px",fontSize:11,textAlign:"center",background:"#FFFBEB"},
+  btn:(bg,fg)=>({background:bg||C.hdr,color:fg||C.wht,border:"none",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}),
+  tbl:{width:"100%",borderCollapse:"collapse",fontSize:11},
+  th:{background:"#F1F5F9",padding:"5px 6px",textAlign:"left",fontWeight:700,fontSize:10,
+    borderBottom:"2px solid #CBD5E1",whiteSpace:"nowrap",position:"sticky",top:0,zIndex:1},
+  td:{padding:"4px 5px",borderBottom:"1px solid #F1F5F9",verticalAlign:"middle"},
+  row:{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap",alignItems:"flex-end"},
+  lbl:{fontSize:10,fontWeight:600,color:C.dim,marginBottom:3,display:"block"},
+};
+
+function App(){
+  const sv=lsLoad();
+  const [ri,setRi]=useState(()=>sv?.ri||R_INIT.map((x,i)=>({...x,id:i,qty:x.d[3]??0})));
+  const [wi,setWi]=useState(()=>sv?.wi||W_INIT.map((x,i)=>({...x,id:i+1000,qty:x.d[2]??0})));
+  const [drums,setDrums]=useState(()=>sv?.drums||DEF_DRUMS.map((x,i)=>({...x,id:i+2000})));
+  const [ibcs,setIbcs]=useState(()=>sv?.ibcs||DEF_IBCS.map((x,i)=>({...x,id:i+3000})));
+  const [deliveries,setDeliveries]=useState(()=>sv?.deliveries||[]);
+  const [pg,setPg]=useState("stock");
+  const [subPg,setSubPg]=useState("monthly");
+  const [sCat,setSCat]=useState("All");
+  const [cCat,setCCat]=useState("All");
+  const [wGrp,setWGrp]=useState("All");
+  const [hwRoom,setHwRoom]=useState("main");
+  const [jTab,setJTab]=useState(JOB_NAMES[0]);
+  const [q,setQ]=useState("");
+  const [saveMsg,setSaveMsg]=useState(null);
+  const timer=useRef(null);
+
+  // Auto-save
+  useEffect(()=>{
+    if(timer.current)clearTimeout(timer.current);
+    timer.current=setTimeout(()=>{
+      lsSave({ri,wi,drums,ibcs,deliveries});
+      setSaveMsg("✅ Saved");
+      setTimeout(()=>setSaveMsg(null),1200);
+    },1500);
+    return()=>clearTimeout(timer.current);
+  },[ri,wi,drums,ibcs,deliveries]);
+
+  const updR=(id,f,v)=>setRi(p=>p.map(x=>x.id===id?{...x,[f]:v}:x));
+  const updW=(id,f,v)=>setWi(p=>p.map(x=>x.id===id?{...x,[f]:v}:x));
+  const updD=(id,v)=>setDrums(p=>p.map(x=>x.id===id?{...x,ct:v}:x));
+  const updI=(id,v)=>setIbcs(p=>p.map(x=>x.id===id?{...x,ct:v}:x));
+
+  const CATS=[...new Set(ri.map(x=>x.c))].sort();
+  const WGRPS=[...new Set(wi.map(x=>x.g))];
+  const low=ri.filter(x=>x.qty<=x.m&&x.qty>=0);
+  const lowW=wi.filter(x=>x.m>0&&x.qty<=x.m);
+  const totalLow=low.length+lowW.length;
+
+  const exportCSV=()=>{
+    const rows=[["Category","Name","UOM","28-Feb Count","Current Qty","Min","Room"],
+      ...ri.map(x=>[x.c,x.n,x.u,x.d[3]??"-",x.qty,x.m,getRoom(x)])];
+    const b=new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(b);
+    a.download="marky-stock-"+new Date().toISOString().slice(0,10)+".csv";a.click();
+  };
+
+  const reset=()=>{
+    if(!confirm("Reset ALL data to defaults? Cannot be undone."))return;
+    const nr=R_INIT.map((x,i)=>({...x,id:i,qty:x.d[3]??0}));
+    const nw=W_INIT.map((x,i)=>({...x,id:i+1000,qty:x.d[2]??0}));
+    setRi(nr);setWi(nw);setDrums(DEF_DRUMS.map((x,i)=>({...x,id:i+2000})));
+    setIbcs(DEF_IBCS.map((x,i)=>({...x,id:i+3000})));setDeliveries([]);
+  };
+
+  const TABS=[
+    {id:"stock",lb:"📦 Stock"},
+    {id:"count",lb:"📋 Count"},
+    {id:"rooms",lb:"🏠 Rooms"},
+    {id:"jobs",lb:"🏗 Jobs"},
+    {id:"reorder",lb:`⚠️ Reorder${totalLow>0?" ("+totalLow+")":""}`},
+    {id:"empties",lb:"🛢 Empties"},
+    {id:"data",lb:"💾 Data"},
+  ];
+
+  const filt=(list)=>{const sq=q.toLowerCase();return sq?list.filter(x=>x.n.toLowerCase().includes(sq)):list;};
+
+  return(
+    <div style={s.app}>
+      <div style={s.hdr}>
+        <div style={{fontSize:15,fontWeight:700}}>MARKY INDUSTRIES</div>
+        <div style={{fontSize:9,color:"#8FA3B8",marginTop:2}}>
+          Warehouse Inventory · Crestmead QLD · v1.1
+          {saveMsg&&<span style={{color:"#4ade80",marginLeft:8}}>{saveMsg}</span>}
+        </div>
+      </div>
+
+      <div style={s.tabs}>
+        {TABS.map(t=>(
+          <button key={t.id} style={s.tab(pg===t.id)} onClick={()=>{setPg(t.id);setQ("");}}>
+            {t.lb}
+          </button>
+        ))}
+      </div>
+
+      <div style={s.content}>
+
+        {/* ── STOCK TAB ── */}
+        {pg==="stock"&&(
+          <div>
+            <div style={{...s.card,background:"#EFF6FF",marginBottom:8}}>
+              <div style={s.row}>
+                <div style={{flex:1}}>
+                  <label style={s.lbl}>🔍 Search items</label>
+                  <input style={s.inp()} value={q} onChange={e=>setQ(e.target.value)} placeholder="Type to search..."/>
+                </div>
+                <div>
+                  <label style={s.lbl}>Category</label>
+                  <select style={s.inp(130)} value={sCat} onChange={e=>setSCat(e.target.value)}>
+                    <option>All</option>{CATS.map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{fontSize:10,color:C.dim}}>
+                {ri.length} items · <span style={{color:C.red,fontWeight:700}}>{low.length} low stock</span> · {ri.filter(x=>x.qty===0).length} zero
+              </div>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={s.tbl}>
+                <thead><tr>
+                  <th style={s.th}>Cat</th><th style={s.th}>Item</th><th style={s.th}>UOM</th>
+                  <th style={s.th}>Prev</th><th style={s.th}>28-Feb</th>
+                  <th style={s.th}>Current</th><th style={s.th}>Min</th><th style={s.th}>Room</th>
+                </tr></thead>
+                <tbody>
+                  {filt(ri).filter(x=>sCat==="All"||x.c===sCat).map(x=>{
+                    const isLow=x.qty<=x.m;
+                    return(
+                      <tr key={x.id} style={{background:isLow?"#FEF2F2":"transparent"}}>
+                        <td style={s.td}><span style={s.badge(CC[x.c]||C.dim)}>{x.c.slice(0,4)}</span></td>
+                        <td style={{...s.td,minWidth:160,maxWidth:220,fontSize:11}}>{isLow&&"🔴 "}{x.n}</td>
+                        <td style={{...s.td,fontSize:9,color:C.dim}}>{x.u}</td>
+                        <td style={{...s.td,textAlign:"center",color:C.dim}}>{x.d[2]??"-"}</td>
+                        <td style={{...s.td,textAlign:"center",background:"#EFF6FF"}}>{x.d[3]??"-"}</td>
+                        <td style={s.td}><input type="number" style={s.numI} value={x.qty} min={0} step={0.25}
+                          onChange={e=>updR(x.id,"qty",parseFloat(e.target.value)||0)}/></td>
+                        <td style={s.td}><input type="number" style={s.minI} value={x.m} min={0} step={0.5}
+                          onChange={e=>updR(x.id,"m",parseFloat(e.target.value)||0)}/></td>
+                        <td style={{...s.td,fontSize:9}}>{ROOM_LBL[getRoom(x)]}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── COUNT TAB ── */}
+        {pg==="count"&&(
+          <div>
+            <div style={s.row}>
+              <button style={s.btn(subPg==="monthly"?C.hdr:"#E5E7EB",subPg==="monthly"?C.wht:C.hdr)} onClick={()=>setSubPg("monthly")}>📅 Monthly</button>
+              <button style={s.btn(subPg==="weekly"?C.org:"#E5E7EB",subPg==="weekly"?C.wht:C.hdr)} onClick={()=>setSubPg("weekly")}>📆 Weekly</button>
+            </div>
+
+            {subPg==="monthly"&&(
+              <div>
+                <div style={{...s.card,background:"#F0FDF4",marginBottom:8}}>
+                  <label style={s.lbl}>Category</label>
+                  <select style={s.inp(160)} value={cCat} onChange={e=>setCCat(e.target.value)}>
+                    <option>All</option>{CATS.map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{overflowX:"auto"}}>
+                  <table style={s.tbl}>
+                    <thead><tr>
+                      <th style={s.th}>Cat</th><th style={s.th}>Item</th><th style={s.th}>UOM</th>
+                      {MO_DATES.map(d=><th key={d} style={{...s.th,background:d==="28-Feb"?"#DBEAFE":undefined,textAlign:"center"}}>{d}</th>)}
+                      <th style={{...s.th,background:"#F0FDF4",textAlign:"center"}}>Now</th>
+                      <th style={{...s.th,textAlign:"center"}}>Min</th>
+                    </tr></thead>
+                    <tbody>
+                      {ri.filter(x=>cCat==="All"||x.c===cCat).map(x=>(
+                        <tr key={x.id} style={{background:x.qty<=x.m?"#FEF2F2":"transparent"}}>
+                          <td style={s.td}><span style={s.badge(CC[x.c]||C.dim)}>{x.c.slice(0,3)}</span></td>
+                          <td style={{...s.td,minWidth:150,fontSize:11}}>{x.n}</td>
+                          <td style={{...s.td,fontSize:9,color:C.dim}}>{x.u}</td>
+                          {x.d.slice(0,4).map((v,i)=>(
+                            <td key={i} style={{...s.td,textAlign:"center",background:i===3?"#EFF6FF":undefined}}>{v??"-"}</td>
+                          ))}
+                          <td style={{...s.td,background:"#F0FDF4"}}>
+                            <input type="number" style={s.numI} value={x.qty} min={0} step={0.25}
+                              onChange={e=>updR(x.id,"qty",parseFloat(e.target.value)||0)}/>
+                          </td>
+                          <td style={s.td}>
+                            <input type="number" style={s.minI} value={x.m} min={0} step={0.5}
+                              onChange={e=>updR(x.id,"m",parseFloat(e.target.value)||0)}/>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {subPg==="weekly"&&(
+              <div>
+                <div style={{...s.card,background:"#FFF7ED",marginBottom:8}}>
+                  <label style={s.lbl}>Group</label>
+                  <select style={s.inp(160)} value={wGrp} onChange={e=>setWGrp(e.target.value)}>
+                    <option>All</option>{WGRPS.map(g=><option key={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div style={{overflowX:"auto"}}>
+                  <table style={s.tbl}>
+                    <thead><tr>
+                      <th style={s.th}>Group</th><th style={s.th}>Item</th><th style={s.th}>Min</th>
+                      {WK_DATES.map(d=><th key={d} style={{...s.th,textAlign:"center"}}>{d}</th>)}
+                      <th style={{...s.th,background:"#F0FDF4",textAlign:"center"}}>Now</th>
+                    </tr></thead>
+                    <tbody>
+                      {wi.filter(x=>wGrp==="All"||x.g===wGrp).map(x=>(
+                        <tr key={x.id} style={{background:x.m>0&&x.qty<=x.m?"#FEF2F2":"transparent"}}>
+                          <td style={{...s.td,fontSize:9,color:C.dim,whiteSpace:"nowrap"}}>{x.g}</td>
+                          <td style={{...s.td,minWidth:140,fontSize:11}}>{x.n}</td>
+                          <td style={{...s.td,textAlign:"center",fontSize:10}}>{x.m||"-"}</td>
+                          {x.d.slice(0,4).map((v,i)=>(
+                            <td key={i} style={{...s.td,textAlign:"center"}}>{v??"-"}</td>
+                          ))}
+                          <td style={{...s.td,background:"#F0FDF4"}}>
+                            <input type="number" style={s.numI} value={x.qty} min={0}
+                              onChange={e=>updW(x.id,"qty",parseFloat(e.target.value)||0)}/>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── ROOMS TAB ── */}
+        {pg==="rooms"&&(
+          <div>
+            <div style={s.row}>
+              {["main","stainless","locked","storeroom2"].map(r=>(
+                <button key={r} style={{...s.btn(hwRoom===r?C.hdr:"#E5E7EB",hwRoom===r?C.wht:C.hdr),fontSize:10}}
+                  onClick={()=>setHwRoom(r)}>{ROOM_LBL[r]}</button>
+              ))}
+            </div>
+            <div style={{...s.card,background:"#F8FAFC",marginBottom:8}}>
+              <div style={{fontWeight:700}}>{ROOM_LBL[hwRoom]}</div>
+              <div style={{fontSize:10,color:C.dim,marginTop:2}}>{ROOM_DESC[hwRoom]}</div>
+              <div style={{fontSize:10,color:C.dim}}>{ri.filter(x=>getRoom(x)===hwRoom).length} items</div>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={s.tbl}>
+                <thead><tr>
+                  <th style={s.th}>Cat</th><th style={s.th}>Item</th><th style={s.th}>UOM</th>
+                  <th style={s.th}>Current</th><th style={s.th}>Min</th>
+                </tr></thead>
+                <tbody>
+                  {ri.filter(x=>getRoom(x)===hwRoom).map(x=>(
+                    <tr key={x.id} style={{background:x.qty<=x.m?"#FEF2F2":"transparent"}}>
+                      <td style={s.td}><span style={s.badge(CC[x.c]||C.dim)}>{x.c.slice(0,4)}</span></td>
+                      <td style={{...s.td,minWidth:160,fontSize:11}}>{x.qty<=x.m&&"🔴 "}{x.n}</td>
+                      <td style={{...s.td,fontSize:9,color:C.dim}}>{x.u}</td>
+                      <td style={s.td}><input type="number" style={s.numI} value={x.qty} min={0} step={0.25}
+                        onChange={e=>updR(x.id,"qty",parseFloat(e.target.value)||0)}/></td>
+                      <td style={s.td}><input type="number" style={s.minI} value={x.m} min={0} step={0.5}
+                        onChange={e=>updR(x.id,"m",parseFloat(e.target.value)||0)}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── JOBS TAB ── */}
+        {pg==="jobs"&&(
+          <div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
+              {JOB_NAMES.map(j=>(
+                <button key={j} style={s.btn(jTab===j?C.blue:"#E5E7EB",jTab===j?C.wht:C.hdr)}
+                  onClick={()=>setJTab(j)}>{j}</button>
+              ))}
+            </div>
+            <table style={s.tbl}>
+              <thead><tr>
+                <th style={s.th}>Description</th><th style={s.th}>Count</th>
+              </tr></thead>
+              <tbody>
+                {JD.filter(x=>x.j===jTab).map((x,i)=>(
+                  <tr key={i} style={{background:i%2===0?"#F8FAFC":"transparent"}}>
+                    <td style={{...s.td,fontSize:11}}>{x.d}</td>
+                    <td style={{...s.td,fontWeight:700,color:x.ct>0?C.grn:C.dim}}>{x.ct}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── REORDER TAB ── */}
+        {pg==="reorder"&&(
+          <div>
+            {totalLow===0?(
+              <div style={{...s.card,textAlign:"center",padding:30}}>
+                <div style={{fontSize:40}}>✅</div>
+                <div style={{fontWeight:700,fontSize:15,marginTop:8}}>All stock levels OK</div>
+              </div>
+            ):(
+              <>
+                <div style={{...s.card,background:"#FEF2F2"}}>
+                  <div style={{fontWeight:700,color:C.red}}>⚠️ {totalLow} items need reordering</div>
+                  <div style={{fontSize:10,color:C.dim}}>{low.length} raw materials · {lowW.length} consumables</div>
+                </div>
+                {low.length>0&&(
+                  <table style={{...s.tbl,marginBottom:12}}>
+                    <thead><tr>
+                      <th style={s.th}>Cat</th><th style={s.th}>Item</th>
+                      <th style={s.th}>Now</th><th style={s.th}>Min</th><th style={s.th}>Short</th>
+                    </tr></thead>
+                    <tbody>
+                      {low.map(x=>(
+                        <tr key={x.id} style={{background:"#FEF2F2"}}>
+                          <td style={s.td}><span style={s.badge(CC[x.c]||C.dim)}>{x.c.slice(0,4)}</span></td>
+                          <td style={{...s.td,fontSize:11}}>{x.n}</td>
+                          <td style={{...s.td,color:C.red,fontWeight:700}}>{x.qty}</td>
+                          <td style={s.td}>{x.m}</td>
+                          <td style={{...s.td,color:C.red,fontWeight:700}}>-{(x.m-x.qty).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {lowW.length>0&&(
+                  <table style={s.tbl}>
+                    <thead><tr>
+                      <th style={s.th}>Group</th><th style={s.th}>Item</th>
+                      <th style={s.th}>Now</th><th style={s.th}>Min</th>
+                    </tr></thead>
+                    <tbody>
+                      {lowW.map(x=>(
+                        <tr key={x.id} style={{background:"#FEF2F2"}}>
+                          <td style={{...s.td,fontSize:9,color:C.dim}}>{x.g}</td>
+                          <td style={{...s.td,fontSize:11}}>{x.n}</td>
+                          <td style={{...s.td,color:C.red,fontWeight:700}}>{x.qty}</td>
+                          <td style={s.td}>{x.m}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── EMPTIES TAB ── */}
+        {pg==="empties"&&(
+          <div>
+            <div style={{...s.card,background:"#FFF7ED",marginBottom:8}}>
+              <div style={{fontWeight:700}}>🛢 Empty Containers — Return Tracking</div>
+              <div style={{fontSize:10,color:C.dim,marginTop:2}}>Track empties for supplier return / disposal</div>
+            </div>
+            <div style={{fontWeight:600,fontSize:11,margin:"8px 0 4px"}}>Drums</div>
+            <table style={s.tbl}>
+              <thead><tr><th style={s.th}>Type</th><th style={s.th}>Count</th></tr></thead>
+              <tbody>
+                {drums.map(x=>(
+                  <tr key={x.id}>
+                    <td style={s.td}>{x.n}</td>
+                    <td style={s.td}><input type="number" style={s.numI} value={x.ct} min={0}
+                      onChange={e=>updD(x.id,parseInt(e.target.value)||0)}/></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{fontWeight:600,fontSize:11,margin:"12px 0 4px"}}>IBCs</div>
+            <table style={s.tbl}>
+              <thead><tr><th style={s.th}>Type</th><th style={s.th}>Count</th></tr></thead>
+              <tbody>
+                {ibcs.map(x=>(
+                  <tr key={x.id}>
+                    <td style={s.td}>{x.n}</td>
+                    <td style={s.td}><input type="number" style={s.numI} value={x.ct} min={0}
+                      onChange={e=>updI(x.id,parseInt(e.target.value)||0)}/></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── DATA TAB ── */}
+        {pg==="data"&&(
+          <div>
+            <div style={s.card}>
+              <div style={{fontWeight:700,marginBottom:8}}>💾 Save & Export</div>
+              <div style={s.row}>
+                <button style={s.btn(C.grn)} onClick={()=>{lsSave({ri,wi,drums,ibcs,deliveries});setSaveMsg("✅ Saved!");setTimeout(()=>setSaveMsg(null),2000);}}>💾 Save Now</button>
+                <button style={s.btn(C.teal)} onClick={exportCSV}>📤 Export CSV</button>
+              </div>
+              <div style={{fontSize:10,color:C.dim,marginTop:4}}>Auto-saves every 1.5 seconds via localStorage</div>
+            </div>
+            <div style={s.card}>
+              <div style={{fontWeight:700,marginBottom:6}}>📊 Summary</div>
+              <div style={{fontSize:12,lineHeight:1.9}}>
+                <div>📦 Raw materials: <strong>{ri.length}</strong></div>
+                <div>🧹 Weekly consumables: <strong>{wi.length}</strong></div>
+                <div>🏗 Job items: <strong>{JD.length}</strong> across {JOB_NAMES.length} companies</div>
+                <div>⚠️ Low stock raw: <strong style={{color:C.red}}>{low.length}</strong></div>
+                <div>📍 1 Magnesium Drive, Crestmead QLD 4132</div>
+                <div>🏢 ABN 72 010 795 310</div>
+              </div>
+            </div>
+            <div style={{...s.card,border:"2px solid "+C.red}}>
+              <div style={{fontWeight:700,color:C.red,marginBottom:6}}>🔄 Reset All Data</div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Resets all quantities to 28-Feb defaults.</div>
+              <button style={s.btn(C.red)} onClick={reset}>🗑️ Reset All</button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
